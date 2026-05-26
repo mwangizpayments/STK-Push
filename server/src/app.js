@@ -23,10 +23,7 @@ app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({
-    ok: true,
-    service: 'm-pesa-stk-api',
-    port: env.port,
-    daraja_mode: env.daraja.useMock ? 'mock' : 'sandbox'
+    status: 'ok'
   });
 });
 
@@ -37,4 +34,3 @@ app.use((_req, res) => {
 });
 
 app.use(errorHandler);
-
