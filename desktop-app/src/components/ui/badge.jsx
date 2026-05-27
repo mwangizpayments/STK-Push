@@ -8,9 +8,9 @@ const badgeVariants = cva(
       variant: {
         default: 'border-transparent bg-primary text-primary-foreground',
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
-        success: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-        pending: 'border-amber-200 bg-amber-50 text-amber-700',
-        failed: 'border-red-200 bg-red-50 text-red-700',
+        success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300',
+        pending: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+        failed: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300',
         outline: 'text-foreground'
       }
     },
@@ -23,4 +23,3 @@ const badgeVariants = cva(
 export function Badge({ className, variant, ...props }) {
   return <span className={cn(badgeVariants({ variant, className }))} {...props} />;
 }
-

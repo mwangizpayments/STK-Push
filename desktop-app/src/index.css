@@ -26,6 +26,28 @@
     --radius: 0.5rem;
   }
 
+  .dark {
+    --background: 222 24% 8%;
+    --foreground: 210 24% 96%;
+    --card: 222 22% 11%;
+    --card-foreground: 210 24% 96%;
+    --popover: 222 22% 11%;
+    --popover-foreground: 210 24% 96%;
+    --primary: 152 61% 44%;
+    --primary-foreground: 222 24% 8%;
+    --secondary: 218 18% 17%;
+    --secondary-foreground: 210 24% 96%;
+    --muted: 218 17% 18%;
+    --muted-foreground: 215 13% 70%;
+    --accent: 199 78% 48%;
+    --accent-foreground: 222 24% 8%;
+    --destructive: 0 68% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 18% 24%;
+    --input: 217 18% 24%;
+    --ring: 152 61% 44%;
+  }
+
   * {
     @apply border-border;
   }
@@ -41,5 +63,8 @@
   input {
     font: inherit;
   }
-}
 
+  .recharts-polar-grid [stroke="#ccc"] {
+    stroke: hsl(var(--border));
+  }
+}

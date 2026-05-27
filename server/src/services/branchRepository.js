@@ -38,42 +38,59 @@ export async function createBranch({ active = true, darajaPasskey, name, shortco
   return sanitizeBranch(branch);
 }
 
-export async function listBranches() {
+export async function listBranches({ includeInactive = false } = {}) {
   if (supabase) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('branches')
         .select(BRANCH_SELECT)
         .order('created_at', { ascending: false });
 
+      if (!includeInactive) {
+        query = query.neq('active', false);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
-      return mergeBranches([...(data || []), ...memoryBranches.map(sanitizeBranch)]);
+      const memoryData = memoryBranches
+        .map(sanitizeBranch)
+        .filter((branch) => includeInactive || branch.active !== false);
+      return mergeBranches([...(data || []), ...memoryData]);
     } catch (error) {
       if (!env.allowMemoryFallback) throw error;
       console.warn(`Supabase branch query failed; using memory fallback: ${error.message}`);
     }
   }
 
-  return memoryBranches.map(sanitizeBranch);
+  return memoryBranches
+    .map(sanitizeBranch)
+    .filter((branch) => includeInactive || branch.active !== false);
 }
 
 export async function updateBranch(id, payload) {
   const patch = {
-    active: payload.active,
-    name: payload.name,
-    shortcode: payload.shortcode || null,
-    till_number: payload.tillNumber || null,
     updated_at: new Date().toISOString()
   };
 
-  if (payload.darajaPasskey) {
-    patch.daraja_passkey = payload.darajaPasskey;
+  if ('active' in payload) {
+    patch.active = payload.active;
   }
 
-  for (const key of Object.keys(patch)) {
-    if (patch[key] === undefined) {
-      delete patch[key];
-    }
+  if ('name' in payload) {
+    patch.name = payload.name;
+  }
+
+  if ('shortcode' in payload) {
+    patch.shortcode = payload.shortcode || null;
+  }
+
+  if ('tillNumber' in payload) {
+    patch.till_number = payload.tillNumber || null;
+  }
+
+  if (payload.darajaPasskey) {
+    patch.daraja_passkey = payload.darajaPasskey;
   }
 
   if (supabase) {
