@@ -1,14 +1,22 @@
 import { requestStkPush } from '../services/darajaService.js';
 import { createTransaction } from '../services/transactionRepository.js';
-import { normalizeAmount, normalizeMpesaPhone, requireString } from '../utils/validators.js';
+import { httpError } from '../utils/httpError.js';
+import { normalizeAmount, normalizeMpesaPhone, requireUuid } from '../utils/validators.js';
 
 export async function createStkPush(req, res) {
   const phone = normalizeMpesaPhone(req.body.phone);
   const amount = normalizeAmount(req.body.amount);
-  const branchId =
-    req.user.role === 'cashier' && req.user.branch_id
-      ? req.user.branch_id
-      : requireString(req.body.branch_id, 'branch_id');
+  let branchId;
+
+  if (req.user.role === 'cashier') {
+    if (!req.user.branch_id) {
+      throw httpError(400, 'No branch is assigned to this cashier');
+    }
+
+    branchId = requireUuid(req.user.branch_id, 'cashier branch_id');
+  } else {
+    branchId = requireUuid(req.body.branch_id, 'branch_id');
+  }
 
   const stk = await requestStkPush({
     amount,
@@ -42,4 +50,3 @@ export async function createStkPush(req, res) {
     }
   });
 }
-
