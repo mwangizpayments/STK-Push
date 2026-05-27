@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { CashierDashboard } from '@/components/CashierDashboard';
 import { LoginScreen } from '@/components/LoginScreen';
+import { normalizeUuid } from '@/config/app';
 import { api } from '@/lib/apiClient';
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient';
 
@@ -41,12 +42,21 @@ export default function App() {
       }
     }
 
-    setProfile({
-      id: user.id,
-      email: user.email,
-      full_name: user.user_metadata?.full_name || '',
-      role: profileData?.role || user.app_metadata?.role || user.user_metadata?.role || 'cashier',
-      branch_id: profileData?.branch_id || user.user_metadata?.branch_id || ''
+    setProfile((currentProfile) => {
+      const sameUser = currentProfile?.id === user.id;
+      const metadataRole = user.app_metadata?.role || user.user_metadata?.role || '';
+      const role = profileData?.role || metadataRole || (sameUser ? currentProfile.role : 'cashier');
+      const branchId = normalizeUuid(
+        profileData?.branch_id || user.user_metadata?.branch_id || (sameUser ? currentProfile.branch_id : '')
+      );
+
+      return {
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || currentProfile?.full_name || '',
+        role,
+        branch_id: branchId
+      };
     });
   }, []);
 
