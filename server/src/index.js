@@ -1,5 +1,6 @@
 import { app } from './app.js';
 import { env } from './config/env.js';
+import { startReconciliationWorker, stopReconciliationWorker } from './services/reconciliationService.js';
 
 const server = app.listen(env.port, () => {
   console.log(`M-Pesa STK API listening on port ${env.port}`);
@@ -11,7 +12,10 @@ const server = app.listen(env.port, () => {
   }
 });
 
+startReconciliationWorker();
+
 process.on('SIGTERM', () => {
+  stopReconciliationWorker();
   server.close(() => {
     process.exit(0);
   });

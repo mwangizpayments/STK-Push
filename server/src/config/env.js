@@ -19,6 +19,12 @@ export const env = {
     (process.env.ALLOW_MEMORY_FALLBACK || (process.env.NODE_ENV === 'production' ? 'false' : 'true')) ===
     'true',
   paymentTimeoutMs: Number(process.env.PAYMENT_TIMEOUT_MS || 90000),
+  reconciliation: {
+    enabled: (process.env.RECONCILIATION_ENABLED || 'true') !== 'false',
+    intervalMs: Number(process.env.RECONCILIATION_INTERVAL_MS || 15000),
+    callbackBatchSize: Number(process.env.RECONCILIATION_CALLBACK_BATCH_SIZE || 25),
+    callbackMaxAttempts: Number(process.env.RECONCILIATION_CALLBACK_MAX_ATTEMPTS || 5)
+  },
   supabase: {
     url: process.env.SUPABASE_URL || '',
     anonKey: process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '',

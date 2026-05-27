@@ -35,6 +35,16 @@ export function requireString(value, label) {
   return String(value).trim();
 }
 
+export function requireIdempotencyKey(value) {
+  const normalized = requireString(value, 'Idempotency-Key');
+
+  if (normalized.length > 128 || !/^[A-Za-z0-9._:-]+$/.test(normalized)) {
+    throw httpError(400, 'Idempotency-Key must be 1-128 URL-safe characters');
+  }
+
+  return normalized;
+}
+
 export function requireUuid(value, label) {
   const normalized = requireString(value, label);
 

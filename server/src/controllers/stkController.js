@@ -1,18 +1,30 @@
 import { requestStkPush } from '../services/darajaService.js';
 import { env } from '../config/env.js';
 import {
-  createTransaction,
+  createIdempotentTransaction,
   markTransactionRequestFailed,
   markTransactionStkAccepted,
-  scheduleTransactionTimeout,
-  updateTransactionFromCallback
+  scheduleTransactionTimeout
 } from '../services/transactionRepository.js';
+import {
+  createCallbackEventHash,
+  recordCallbackEvent
+} from '../services/callbackEventRepository.js';
+import { processCallbackEvent } from '../services/callbackProcessor.js';
 import { httpError } from '../utils/httpError.js';
-import { normalizeAmount, normalizeMpesaPhone, requireUuid } from '../utils/validators.js';
+import {
+  normalizeAmount,
+  normalizeMpesaPhone,
+  requireIdempotencyKey,
+  requireUuid
+} from '../utils/validators.js';
 
 export async function createStkPush(req, res) {
   const phone = normalizeMpesaPhone(req.body.phone);
   const amount = normalizeAmount(req.body.amount);
+  const idempotencyKey = requireIdempotencyKey(
+    req.header('Idempotency-Key') || req.body.idempotency_key
+  );
   let branchId;
 
   if (req.user.role === 'cashier') {
@@ -25,17 +37,34 @@ export async function createStkPush(req, res) {
     branchId = requireUuid(req.body.branch_id, 'branch_id');
   }
 
-  const createdTransaction = await createTransaction({
+  const { created, transaction: createdTransaction } = await createIdempotentTransaction({
     amount,
     branch_id: branchId,
     cashier_id: req.user.id,
+    idempotency_key: idempotencyKey,
     phone,
     raw_request: {
       phone,
       amount,
-      branch_id: branchId
+      branch_id: branchId,
+      idempotency_key: idempotencyKey
     }
   });
+
+  ensureIdempotentReplayMatches(createdTransaction, {
+    amount,
+    branchId,
+    phone
+  });
+
+  if (!created) {
+    res.status(200).json({
+      idempotent_replay: true,
+      transaction: createdTransaction,
+      stk: buildReplayStkResponse(createdTransaction)
+    });
+    return;
+  }
 
   let stk;
 
@@ -102,33 +131,34 @@ function scheduleMockCompletion({ amount, checkoutRequestId, phone }) {
 
   setTimeout(() => {
     const receiptNumber = createMockReceipt();
-
-    updateTransactionFromCallback({
-      callbackPayload: {
-        Body: {
-          stkCallback: {
-            CheckoutRequestID: checkoutRequestId,
-            ResultCode: 0,
-            ResultDesc: 'Mock payment completed successfully',
-            CallbackMetadata: {
-              Item: [
-                { Name: 'Amount', Value: amount },
-                { Name: 'MpesaReceiptNumber', Value: receiptNumber },
-                { Name: 'PhoneNumber', Value: phone }
-              ]
-            }
+    const callbackPayload = {
+      Body: {
+        stkCallback: {
+          CheckoutRequestID: checkoutRequestId,
+          ResultCode: 0,
+          ResultDesc: 'Mock payment completed successfully',
+          CallbackMetadata: {
+            Item: [
+              { Name: 'Amount', Value: amount },
+              { Name: 'MpesaReceiptNumber', Value: receiptNumber },
+              { Name: 'PhoneNumber', Value: phone }
+            ]
           }
         }
-      },
+      }
+    };
+
+    recordCallbackEvent({
       checkoutRequestId,
-      failureReason: null,
-      receiptNumber,
+      eventHash: createCallbackEventHash(callbackPayload),
+      payload: callbackPayload,
       resultCode: 0,
-      status: 'success'
+      mpesaReceipt: receiptNumber
     })
-      .then((transaction) => {
+      .then((event) => processCallbackEvent(event.id))
+      .then((result) => {
         console.log(
-          `Mock auto-complete finished: checkout=${checkoutRequestId}, updated=${Boolean(transaction)}, status=${transaction?.status || 'not_found'}`
+          `Mock auto-complete finished: checkout=${checkoutRequestId}, updated=${Boolean(result.transaction)}, status=${result.transaction?.status || 'not_found'}`
         );
       })
       .catch((error) => {
@@ -138,5 +168,50 @@ function scheduleMockCompletion({ amount, checkoutRequestId, phone }) {
 }
 
 function createMockReceipt() {
-  return `MOCK${Date.now().toString().slice(-8)}`;
+  return `MOCK${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, '0')}`;
+}
+
+function buildReplayStkResponse(transaction) {
+  return {
+    merchant_request_id: transaction.merchant_request_id,
+    checkout_request_id: transaction.checkout_request_id,
+    response_code: transaction.checkout_request_id ? '0' : '202',
+    response_description: transaction.checkout_request_id
+      ? 'Idempotent replay: payment request already accepted'
+      : 'Idempotent replay: payment request is still being initiated',
+    customer_message: transaction.checkout_request_id
+      ? buildCustomerMessage(transaction)
+      : 'Payment request is already being initiated.',
+    mode: env.daraja.useMock ? 'mock' : 'daraja',
+    callback_url_configured: Boolean(env.daraja.callbackUrl)
+  };
+}
+
+function buildCustomerMessage(transaction) {
+  if (['created', 'pending_pin', 'processing'].includes(transaction.status)) {
+    return 'Waiting for customer PIN.';
+  }
+
+  if (transaction.status === 'success') {
+    return 'Payment already confirmed.';
+  }
+
+  return 'Payment request already completed.';
+}
+
+function ensureIdempotentReplayMatches(transaction, { amount, branchId, phone }) {
+  const rawRequest = transaction.raw_request || {};
+  const samePayload =
+    String(transaction.branch_id) === String(branchId) &&
+    String(transaction.phone) === String(phone) &&
+    Number(transaction.amount) === Number(amount) &&
+    (!rawRequest.phone || String(rawRequest.phone) === String(phone)) &&
+    (!rawRequest.branch_id || String(rawRequest.branch_id) === String(branchId)) &&
+    (!rawRequest.amount || Number(rawRequest.amount) === Number(amount));
+
+  if (!samePayload) {
+    throw httpError(409, 'Idempotency-Key was already used for a different payment request');
+  }
 }

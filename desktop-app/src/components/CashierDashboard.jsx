@@ -35,6 +35,7 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
 
   const phoneRef = useRef(null);
   const amountRef = useRef(null);
+  const paymentRequestKeyRef = useRef('');
 
   const branchId = profile?.branch_id || DEFAULT_BRANCH_ID;
   const currentTransaction = useMemo(
@@ -105,13 +106,20 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
     setMessage('Waiting for customer PIN. Ask the customer to check their phone.');
 
     try {
+      const idempotencyKey = ensurePaymentRequestKey(paymentRequestKeyRef);
       const { data } = await api.post('/api/stkpush', {
         phone: normalizedPhone,
         amount: Math.round(amountValue),
-        branch_id: branchId
+        branch_id: branchId,
+        idempotency_key: idempotencyKey
+      }, {
+        headers: {
+          'Idempotency-Key': idempotencyKey
+        }
       });
 
       setCurrentTransactionId(data.transaction.id);
+      paymentRequestKeyRef.current = '';
       setPhone('');
       setAmount('');
       setMessage(data.stk.customer_message || 'Waiting for customer PIN.');
@@ -126,6 +134,7 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
   }
 
   function handlePhoneChange(value) {
+    paymentRequestKeyRef.current = '';
     setPhone(formatKenyanPhoneInput(value));
     if (status === 'failed') {
       setStatus('idle');
@@ -134,6 +143,7 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
   }
 
   function handleAmountChange(value) {
+    paymentRequestKeyRef.current = '';
     setAmount(value);
     if (status === 'failed') {
       setStatus('idle');
@@ -149,6 +159,7 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
   }
 
   function handleRetryTransaction(transaction) {
+    paymentRequestKeyRef.current = '';
     setPhone(formatKenyanPhoneInput(transaction.phone));
     setAmount(String(Math.round(Number(transaction.amount || 0)) || ''));
     setStatus('idle');
@@ -463,6 +474,16 @@ function normalizeKenyanPhone(value) {
   }
 
   return '';
+}
+
+function ensurePaymentRequestKey(ref) {
+  if (!ref.current) {
+    ref.current =
+      window.crypto?.randomUUID?.() ||
+      `cashier-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  return ref.current;
 }
 
 function formatPhoneForReceipt(value) {

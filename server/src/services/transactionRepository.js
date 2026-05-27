@@ -1,24 +1,57 @@
 import crypto from 'node:crypto';
 import { env } from '../config/env.js';
 import { supabase } from '../config/supabase.js';
+import { setCallbackEventState } from './callbackEventRepository.js';
 import {
   ACTIVE_TRANSACTION_STATES,
-  CALLBACK_MUTABLE_STATES,
-  TRANSACTION_STATES,
-  isFinalTransactionState
+  TRANSACTION_STATES
 } from './transactionState.js';
 
 const memoryTransactions = [];
 
 export async function createTransaction(payload) {
+  const transaction = buildTransaction(payload);
+
+  return insertTransaction(transaction);
+}
+
+export async function createIdempotentTransaction(payload) {
+  if (!payload.idempotency_key) {
+    return {
+      created: true,
+      transaction: await createTransaction(payload)
+    };
+  }
+
+  const existing = await findTransactionByIdempotencyKey(payload.idempotency_key);
+
+  if (existing) {
+    return {
+      created: false,
+      transaction: existing
+    };
+  }
+
+  const transaction = buildTransaction(payload);
+  const inserted = await insertTransaction(transaction, { allowConflictLookup: true });
+
+  return {
+    created: inserted.id === transaction.id,
+    transaction: inserted
+  };
+}
+
+function buildTransaction(payload) {
   const now = new Date().toISOString();
   const timeoutAt = new Date(Date.now() + env.paymentTimeoutMs).toISOString();
-  const transaction = {
+
+  return {
     id: crypto.randomUUID(),
     branch_id: payload.branch_id,
     cashier_id: isUuid(payload.cashier_id) ? payload.cashier_id : null,
     phone: payload.phone,
     amount: payload.amount,
+    idempotency_key: payload.idempotency_key || null,
     status: payload.status || TRANSACTION_STATES.CREATED,
     merchant_request_id: payload.merchant_request_id || null,
     checkout_request_id: payload.checkout_request_id || null,
@@ -30,11 +63,17 @@ export async function createTransaction(payload) {
     callback_received_at: null,
     callback_processed_at: null,
     callback_attempts: 0,
+    initiated_at: null,
     timeout_at: timeoutAt,
+    reconciled_at: null,
+    reconciliation_attempts: 0,
+    reconciliation_reason: null,
     created_at: now,
     updated_at: now
   };
+}
 
+async function insertTransaction(transaction, { allowConflictLookup = false } = {}) {
   if (supabase) {
     try {
       const { data, error } = await supabase
@@ -46,8 +85,30 @@ export async function createTransaction(payload) {
       if (error) throw error;
       return data;
     } catch (error) {
+      if (
+        allowConflictLookup &&
+        transaction.idempotency_key &&
+        isUniqueViolation(error)
+      ) {
+        const existing = await findTransactionByIdempotencyKey(transaction.idempotency_key);
+
+        if (existing) {
+          return existing;
+        }
+      }
+
       if (!env.allowMemoryFallback) throw error;
       console.warn(`Supabase transaction insert failed; using memory fallback: ${error.message}`);
+    }
+  }
+
+  if (transaction.idempotency_key) {
+    const existing = memoryTransactions.find(
+      (item) => item.idempotency_key === transaction.idempotency_key
+    );
+
+    if (existing) {
+      return existing;
     }
   }
 
@@ -56,14 +117,16 @@ export async function createTransaction(payload) {
 }
 
 export async function markTransactionStkAccepted(id, { checkoutRequestId, merchantRequestId, rawResponse }) {
+  const now = new Date().toISOString();
   const timeoutAt = new Date(Date.now() + env.paymentTimeoutMs).toISOString();
   const patch = {
     status: TRANSACTION_STATES.PENDING_PIN,
     merchant_request_id: merchantRequestId,
     checkout_request_id: checkoutRequestId,
     raw_response: rawResponse || {},
+    initiated_at: now,
     timeout_at: timeoutAt,
-    updated_at: new Date().toISOString()
+    updated_at: now
   };
 
   return updateTransactionById(id, patch);
@@ -78,69 +141,36 @@ export async function markTransactionRequestFailed(id, failureReason = 'Payment 
 }
 
 export async function applyCallbackToTransaction({
+  callbackEventId = null,
   callbackPayload,
   checkoutRequestId,
   failureReason,
+  merchantRequestId = null,
   receiptNumber,
   resultCode,
   status
 }) {
-  if (receiptNumber) {
-    const transactionWithReceipt = await findTransactionByReceiptNumber(receiptNumber);
-
-    if (
-      transactionWithReceipt &&
-      transactionWithReceipt.checkout_request_id !== checkoutRequestId
-    ) {
-      return {
-        duplicate: true,
-        reason: 'receipt_already_processed',
-        transaction: transactionWithReceipt
-      };
-    }
-  }
-
-  const processingTransaction = await markTransactionProcessing({
-    callbackPayload,
-    checkoutRequestId,
-    resultCode
-  });
-
-  if (!processingTransaction) {
-    return {
-      duplicate: true,
-      reason: 'checkout_already_processed',
-      transaction: await findTransactionByCheckoutRequestId(checkoutRequestId)
-    };
-  }
-
-  const patch = {
-    status,
-    result_code: resultCode,
-    mpesa_receipt: receiptNumber || null,
-    failure_reason: failureReason || null,
-    callback_payload: callbackPayload,
-    callback_processed_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
-
   if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .update(patch)
-        .eq('checkout_request_id', checkoutRequestId)
-        .is('callback_processed_at', null)
-        .in('status', [TRANSACTION_STATES.PROCESSING, ...CALLBACK_MUTABLE_STATES])
-        .select('*')
-        .maybeSingle();
+      const { data, error } = await supabase.rpc('apply_stk_callback', {
+        p_callback_event_id: callbackEventId,
+        p_callback_payload: callbackPayload || {},
+        p_checkout_request_id: checkoutRequestId,
+        p_failure_reason: failureReason || null,
+        p_merchant_request_id: merchantRequestId,
+        p_mpesa_receipt: receiptNumber || null,
+        p_result_code: resultCode,
+        p_status: status
+      });
 
       if (error) throw error;
-      if (data) {
+      const row = Array.isArray(data) ? data[0] : data;
+
+      if (row) {
         return {
-          duplicate: false,
-          reason: null,
-          transaction: data
+          duplicate: Boolean(row.duplicate),
+          reason: row.reason || null,
+          transaction: row.transaction_row || null
         };
       }
     } catch (error) {
@@ -149,20 +179,81 @@ export async function applyCallbackToTransaction({
     }
   }
 
+  if (receiptNumber) {
+    const transactionWithReceipt = await findTransactionByReceiptNumber(receiptNumber);
+
+    if (
+      transactionWithReceipt &&
+      transactionWithReceipt.checkout_request_id !== checkoutRequestId
+    ) {
+      await setCallbackEventState({
+        errorMessage: 'M-Pesa receipt is already attached to another transaction',
+        id: callbackEventId,
+        status: 'duplicate',
+        transactionId: transactionWithReceipt.id
+      });
+
+      return {
+        duplicate: true,
+        reason: 'receipt_already_processed',
+        transaction: transactionWithReceipt
+      };
+    }
+  }
+
   const existing = memoryTransactions.find((item) => item.checkout_request_id === checkoutRequestId);
-  if (
-    !existing ||
-    existing.callback_processed_at ||
-    (isFinalTransactionState(existing.status) && existing.status !== TRANSACTION_STATES.TIMEOUT)
-  ) {
+
+  if (!existing) {
+    await setCallbackEventState({
+      errorMessage: 'No transaction found for checkout_request_id',
+      id: callbackEventId,
+      status: 'orphan'
+    });
+
     return {
       duplicate: true,
-      reason: 'checkout_already_processed',
-      transaction: existing || null
+      reason: 'transaction_not_found',
+      transaction: null
     };
   }
 
-  Object.assign(existing, patch);
+  if (existing.callback_processed_at) {
+    await setCallbackEventState({
+      errorMessage: 'Callback already processed for checkout_request_id',
+      id: callbackEventId,
+      status: 'duplicate',
+      transactionId: existing.id
+    });
+
+    return {
+      duplicate: true,
+      reason: 'checkout_already_processed',
+      transaction: existing
+    };
+  }
+
+  const now = new Date().toISOString();
+  Object.assign(existing, {
+    status,
+    result_code: resultCode,
+    mpesa_receipt: receiptNumber || null,
+    failure_reason: failureReason || null,
+    callback_payload: callbackPayload,
+    callback_received_at: now,
+    callback_processed_at: now,
+    callback_attempts: Number(existing.callback_attempts || 0) + 1,
+    reconciled_at: now,
+    reconciliation_attempts: Number(existing.reconciliation_attempts || 0) + 1,
+    reconciliation_reason: 'callback',
+    updated_at: now
+  });
+
+  await setCallbackEventState({
+    id: callbackEventId,
+    status: 'processed',
+    transactionId: existing.id
+  });
+
   return {
     duplicate: false,
     reason: null,
@@ -180,6 +271,9 @@ export async function markTimedOutTransactions() {
   const patch = {
     status: TRANSACTION_STATES.TIMEOUT,
     failure_reason: 'The customer did not respond in time.',
+    reconciled_at: now,
+    reconciliation_attempts: 1,
+    reconciliation_reason: 'timeout_sweep',
     updated_at: now
   };
 
@@ -212,18 +306,24 @@ export async function markTimedOutTransactions() {
 }
 
 export function scheduleTransactionTimeout({ checkoutRequestId }) {
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     markSingleTransactionTimedOut(checkoutRequestId).catch((error) => {
       console.error(`Payment timeout update failed: checkout=${checkoutRequestId}, error=${error.message}`);
     });
   }, env.paymentTimeoutMs);
+
+  timer.unref?.();
 }
 
 export async function markSingleTransactionTimedOut(checkoutRequestId) {
+  const now = new Date().toISOString();
   const patch = {
     status: TRANSACTION_STATES.TIMEOUT,
     failure_reason: 'The customer did not respond in time.',
-    updated_at: new Date().toISOString()
+    reconciled_at: now,
+    reconciliation_attempts: 1,
+    reconciliation_reason: 'timeout_worker',
+    updated_at: now
   };
 
   if (supabase) {
@@ -233,7 +333,7 @@ export async function markSingleTransactionTimedOut(checkoutRequestId) {
         .update(patch)
         .eq('checkout_request_id', checkoutRequestId)
         .is('callback_processed_at', null)
-        .in('status', CALLBACK_MUTABLE_STATES)
+        .in('status', ACTIVE_TRANSACTION_STATES)
         .select('*')
         .maybeSingle();
 
@@ -406,24 +506,8 @@ export async function findTransactionByReceiptNumber(receiptNumber) {
   return memoryTransactions.find((item) => item.mpesa_receipt === receiptNumber) || null;
 }
 
-async function markTransactionProcessing({ callbackPayload, checkoutRequestId, resultCode }) {
-  const existing = await findTransactionByCheckoutRequestId(checkoutRequestId);
-  const attempts = Number(existing?.callback_attempts || 0) + 1;
-  const now = new Date().toISOString();
-  const patch = {
-    status: TRANSACTION_STATES.PROCESSING,
-    result_code: resultCode,
-    callback_payload: callbackPayload,
-    callback_received_at: now,
-    callback_attempts: attempts,
-    updated_at: now
-  };
-
-  if (
-    !existing ||
-    existing.callback_processed_at ||
-    (isFinalTransactionState(existing.status) && existing.status !== TRANSACTION_STATES.TIMEOUT)
-  ) {
+export async function findTransactionByIdempotencyKey(idempotencyKey) {
+  if (!idempotencyKey) {
     return null;
   }
 
@@ -431,32 +515,19 @@ async function markTransactionProcessing({ callbackPayload, checkoutRequestId, r
     try {
       const { data, error } = await supabase
         .from('transactions')
-        .update(patch)
-        .eq('checkout_request_id', checkoutRequestId)
-        .is('callback_processed_at', null)
-        .in('status', CALLBACK_MUTABLE_STATES)
         .select('*')
+        .eq('idempotency_key', idempotencyKey)
         .maybeSingle();
 
       if (error) throw error;
       if (data) return data;
     } catch (error) {
       if (!env.allowMemoryFallback) throw error;
-      console.warn(`Supabase transaction processing update failed; using memory fallback: ${error.message}`);
+      console.warn(`Supabase idempotency lookup failed; using memory fallback: ${error.message}`);
     }
   }
 
-  const memoryTransaction = memoryTransactions.find((item) => item.checkout_request_id === checkoutRequestId);
-  if (
-    !memoryTransaction ||
-    memoryTransaction.callback_processed_at ||
-    (isFinalTransactionState(memoryTransaction.status) && memoryTransaction.status !== TRANSACTION_STATES.TIMEOUT)
-  ) {
-    return null;
-  }
-
-  Object.assign(memoryTransaction, patch);
-  return memoryTransaction;
+  return memoryTransactions.find((item) => item.idempotency_key === idempotencyKey) || null;
 }
 
 function filterMemoryTransactions({ branchId, dateFrom, dateTo, search, status }) {
@@ -497,6 +568,10 @@ function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || '')
   );
+}
+
+function isUniqueViolation(error) {
+  return error?.code === '23505' || /duplicate key|unique constraint/i.test(error?.message || '');
 }
 
 function mergeById(items) {
