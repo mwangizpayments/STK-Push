@@ -24,6 +24,10 @@ export async function handleSafaricomCallback(req, res) {
     status
   });
 
+  console.log(
+    `Safaricom callback received: checkout=${checkoutRequestId}, result_code=${resultCode}, status=${status}, updated=${Boolean(transaction)}`
+  );
+
   res.json({
     received: true,
     status,
@@ -34,4 +38,3 @@ export async function handleSafaricomCallback(req, res) {
 function findMetadataValue(items, name) {
   return items.find((item) => item.Name === name)?.Value || null;
 }
-

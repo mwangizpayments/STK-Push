@@ -9,6 +9,8 @@ function csv(value) {
     .filter(Boolean);
 }
 
+const darajaUseMock = (process.env.DARAJA_USE_MOCK || 'true') !== 'false';
+
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 5000),
@@ -22,10 +24,9 @@ export const env = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || ''
   },
   daraja: {
-    useMock: (process.env.DARAJA_USE_MOCK || 'true') !== 'false',
+    useMock: darajaUseMock,
     mockAutoComplete:
-      (process.env.DARAJA_MOCK_AUTO_COMPLETE ||
-        (process.env.NODE_ENV === 'production' ? 'false' : 'true')) === 'true',
+      (process.env.DARAJA_MOCK_AUTO_COMPLETE || (darajaUseMock ? 'true' : 'false')) === 'true',
     mockAutoCompleteDelayMs: Number(process.env.DARAJA_MOCK_AUTO_COMPLETE_DELAY_MS || 2500),
     consumerKey: process.env.DARAJA_CONSUMER_KEY || '',
     consumerSecret: process.env.DARAJA_CONSUMER_SECRET || '',

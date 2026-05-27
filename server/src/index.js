@@ -3,6 +3,9 @@ import { env } from './config/env.js';
 
 const server = app.listen(env.port, () => {
   console.log(`M-Pesa STK API listening on port ${env.port}`);
+  console.log(
+    `Runtime: node_env=${env.nodeEnv}, daraja_mock=${env.daraja.useMock}, mock_auto_complete=${env.daraja.mockAutoComplete}, callback_url_set=${Boolean(env.daraja.callbackUrl)}`
+  );
 });
 
 process.on('SIGTERM', () => {
@@ -10,4 +13,3 @@ process.on('SIGTERM', () => {
     process.exit(0);
   });
 });
-

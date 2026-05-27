@@ -40,6 +40,10 @@ export async function createStkPush(req, res) {
     raw_response: stk
   });
 
+  console.log(
+    `STK Push created: transaction=${transaction.id}, checkout=${stk.CheckoutRequestID}, status=${transaction.status}, mock=${env.daraja.useMock}`
+  );
+
   scheduleMockCompletion({
     amount,
     checkoutRequestId: stk.CheckoutRequestID,
@@ -60,8 +64,15 @@ export async function createStkPush(req, res) {
 
 function scheduleMockCompletion({ amount, checkoutRequestId, phone }) {
   if (!env.daraja.useMock || !env.daraja.mockAutoComplete) {
+    console.log(
+      `Mock auto-complete skipped: checkout=${checkoutRequestId}, mock=${env.daraja.useMock}, auto_complete=${env.daraja.mockAutoComplete}`
+    );
     return;
   }
+
+  console.log(
+    `Mock auto-complete scheduled: checkout=${checkoutRequestId}, delay_ms=${env.daraja.mockAutoCompleteDelayMs}`
+  );
 
   setTimeout(() => {
     const receiptNumber = createMockReceipt();
@@ -88,9 +99,15 @@ function scheduleMockCompletion({ amount, checkoutRequestId, phone }) {
       receiptNumber,
       resultCode: 0,
       status: 'success'
-    }).catch((error) => {
-      console.error(`Mock callback failed: ${error.message}`);
-    });
+    })
+      .then((transaction) => {
+        console.log(
+          `Mock auto-complete finished: checkout=${checkoutRequestId}, updated=${Boolean(transaction)}, status=${transaction?.status || 'not_found'}`
+        );
+      })
+      .catch((error) => {
+        console.error(`Mock callback failed: checkout=${checkoutRequestId}, error=${error.message}`);
+      });
   }, env.daraja.mockAutoCompleteDelayMs);
 }
 
