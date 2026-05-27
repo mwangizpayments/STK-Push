@@ -1,5 +1,16 @@
 import { updateTransactionFromCallback } from '../services/transactionRepository.js';
+import { env } from '../config/env.js';
 import { httpError } from '../utils/httpError.js';
+
+export function confirmCallbackUrl(_req, res) {
+  res.json({
+    status: 'ok',
+    callback_url_configured: Boolean(env.daraja.callbackUrl),
+    callback_url: env.daraja.callbackUrl || null,
+    callback_endpoint: '/api/callback',
+    daraja_mode: env.daraja.useMock ? 'mock' : 'daraja'
+  });
+}
 
 export async function handleSafaricomCallback(req, res) {
   const callback = req.body?.Body?.stkCallback || req.body?.stkCallback || req.body;

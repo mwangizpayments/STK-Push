@@ -57,7 +57,9 @@ export async function createStkPush(req, res) {
       checkout_request_id: stk.CheckoutRequestID,
       response_code: stk.ResponseCode,
       response_description: stk.ResponseDescription,
-      customer_message: stk.CustomerMessage
+      customer_message: 'STK request accepted. Waiting for backend callback.',
+      mode: env.daraja.useMock ? 'mock' : 'daraja',
+      callback_url_configured: Boolean(env.daraja.callbackUrl)
     }
   });
 }

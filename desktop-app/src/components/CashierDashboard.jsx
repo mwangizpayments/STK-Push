@@ -34,7 +34,7 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
 
     setStatus(currentTransaction.status || 'pending');
     if (currentTransaction.status === 'success') {
-      setMessage(`Receipt ${currentTransaction.mpesa_receipt || currentTransaction.receipt_number || 'received'}`);
+      setMessage('Backend callback received for this transaction.');
     }
     if (currentTransaction.status === 'failed') {
       setMessage(currentTransaction.failure_reason || 'Payment failed');
@@ -63,7 +63,7 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
       });
 
       setCurrentTransactionId(data.transaction.id);
-      setMessage(data.stk.customer_message || 'STK Push sent.');
+      setMessage(data.stk.customer_message || 'STK request accepted. Waiting for backend callback.');
       await onRefreshTransactions();
     } catch (error) {
       setStatus('failed');

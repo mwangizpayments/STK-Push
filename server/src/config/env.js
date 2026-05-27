@@ -25,8 +25,7 @@ export const env = {
   },
   daraja: {
     useMock: darajaUseMock,
-    mockAutoComplete:
-      (process.env.DARAJA_MOCK_AUTO_COMPLETE || (darajaUseMock ? 'true' : 'false')) === 'true',
+    mockAutoComplete: (process.env.DARAJA_MOCK_AUTO_COMPLETE || 'false') === 'true',
     mockAutoCompleteDelayMs: Number(process.env.DARAJA_MOCK_AUTO_COMPLETE_DELAY_MS || 2500),
     consumerKey: process.env.DARAJA_CONSUMER_KEY || '',
     consumerSecret: process.env.DARAJA_CONSUMER_SECRET || '',
