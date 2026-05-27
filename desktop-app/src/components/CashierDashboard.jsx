@@ -1,37 +1,117 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Clock3,
+  Info,
   Loader2,
   LogOut,
   Menu,
   Phone,
   ReceiptText,
   Send,
+  Settings,
   Smartphone,
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AboutModal } from '@/components/AboutModal';
+import { CashierSettingsModal } from '@/components/CashierSettingsModal';
 import { StatusPill } from '@/components/StatusPill';
+import { CASHIER_MODES } from '@/config/cashierMode';
 import { DEFAULT_BRANCH_ID } from '@/config/app';
 import { api } from '@/lib/apiClient';
 
 const activeStatuses = ['created', 'pending', 'pending_pin', 'processing'];
 const failedStatuses = ['failed', 'timeout', 'cancelled'];
+const visibleTransactionCount = 10;
+const SAFARICOM_PREFIXES = new Set([
+  '0700',
+  '0701',
+  '0702',
+  '0703',
+  '0704',
+  '0705',
+  '0706',
+  '0707',
+  '0708',
+  '0709',
+  '0710',
+  '0711',
+  '0712',
+  '0713',
+  '0714',
+  '0715',
+  '0716',
+  '0717',
+  '0718',
+  '0719',
+  '0720',
+  '0721',
+  '0722',
+  '0723',
+  '0724',
+  '0725',
+  '0726',
+  '0727',
+  '0728',
+  '0729',
+  '0740',
+  '0741',
+  '0742',
+  '0743',
+  '0745',
+  '0746',
+  '0748',
+  '0757',
+  '0758',
+  '0759',
+  '0768',
+  '0769',
+  '0790',
+  '0791',
+  '0792',
+  '0793',
+  '0794',
+  '0795',
+  '0796',
+  '0797',
+  '0798',
+  '0799',
+  '0110',
+  '0111',
+  '0112',
+  '0113',
+  '0114',
+  '0115',
+  '0116',
+  '0117'
+]);
 
-export function CashierDashboard({ onLogout, onRefreshTransactions, profile, transactions }) {
+export function CashierDashboard({
+  cashierMode = CASHIER_MODES.SIMPLE,
+  onCashierModeChange,
+  onLogout,
+  onRefreshTransactions,
+  profile,
+  transactions
+}) {
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('Ready for next payment.');
   const [currentTransactionId, setCurrentTransactionId] = useState('');
   const [selectedTransactionId, setSelectedTransactionId] = useState('');
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [version, setVersion] = useState('0.1.0');
+  const [version, setVersion] = useState('1.0.0');
 
   const phoneRef = useRef(null);
   const amountRef = useRef(null);
@@ -50,6 +130,11 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
   const amountValue = Number(amount);
   const canPay = Boolean(normalizedPhone && Number.isFinite(amountValue) && amountValue > 0 && branchId);
   const displayStatus = currentTransaction?.status || status;
+  const visibleTransactions = isHistoryExpanded
+    ? transactions
+    : transactions.slice(0, visibleTransactionCount);
+  const hiddenTransactionCount = Math.max(transactions.length - visibleTransactionCount, 0);
+  const isSimpleMode = cashierMode === CASHIER_MODES.SIMPLE;
 
   useEffect(() => {
     window.mpesaDesktop?.appVersion?.().then(setVersion).catch(() => {});
@@ -77,6 +162,22 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
     setMessage(buildStateMessage(currentTransaction));
   }, [currentTransaction]);
 
+  useEffect(() => {
+    if (!isSimpleMode || displayStatus !== 'success') {
+      return undefined;
+    }
+
+    const resetTimer = window.setTimeout(() => {
+      setCurrentTransactionId('');
+      setSelectedTransactionId('');
+      setStatus('idle');
+      setMessage('Ready for next payment.');
+      phoneRef.current?.focus();
+    }, 1200);
+
+    return () => window.clearTimeout(resetTimer);
+  }, [displayStatus, isSimpleMode]);
+
   async function handleSubmit(event) {
     event.preventDefault();
     setMessage('');
@@ -89,7 +190,7 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
 
     if (!normalizedPhone) {
       setStatus('failed');
-      setMessage('Enter a valid Safaricom number like 0712345678 or +254712345678.');
+      setMessage('Enter a valid Safaricom number like 0712345678, 0110123456, or +254712345678.');
       phoneRef.current?.focus();
       return;
     }
@@ -168,7 +269,7 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
   }
 
   return (
-    <main className="relative min-h-screen overflow-y-auto bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--secondary)/0.34))] px-5 py-5 text-foreground">
+    <main className="relative min-h-screen overflow-y-auto bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--secondary)/0.34))] px-5 py-5 text-foreground lg:h-screen lg:overflow-hidden">
       <div className="absolute left-5 top-5 z-20">
         <Button
           aria-label="Menu"
@@ -186,6 +287,28 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
             <p className="truncate px-2 pb-2 text-xs text-muted-foreground">
               Branch {branchId || 'not assigned'}
             </p>
+            <Button
+              className="w-full justify-start"
+              variant="ghost"
+              onClick={() => {
+                setIsSettingsOpen(true);
+                setIsMenuOpen(false);
+              }}
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Button>
+            <Button
+              className="w-full justify-start"
+              variant="ghost"
+              onClick={() => {
+                setIsAboutOpen(true);
+                setIsMenuOpen(false);
+              }}
+            >
+              <Info className="h-4 w-4" />
+              About
+            </Button>
             <Button className="w-full justify-start" variant="ghost" onClick={onLogout}>
               <LogOut className="h-4 w-4" />
               Logout
@@ -194,117 +317,139 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
         ) : null}
       </div>
 
-      <section className="mx-auto grid min-h-[calc(100vh-40px)] max-w-6xl items-center gap-5 pt-14 lg:grid-cols-[minmax(0,1fr)_390px] lg:pt-0">
-        <form
-          className={`rounded-xl border bg-card p-6 shadow-xl shadow-black/5 transition-all duration-200 sm:p-8 ${
-            displayStatus === 'success' ? 'border-emerald-300 payment-success-glow dark:border-emerald-900' : ''
-          }`}
-          onSubmit={handleSubmit}
-        >
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Payment terminal</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-normal">Collect M-Pesa payment</h1>
-            </div>
-            <StatusPill status={displayStatus} />
-          </div>
-
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="phone">Customer phone</Label>
-              <div className="relative">
-                <Phone className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
-                <Input
-                  ref={phoneRef}
-                  id="phone"
-                  className="h-14 rounded-lg pl-12 text-xl tracking-normal"
-                  inputMode="tel"
-                  placeholder="0712 345 678"
-                  value={phone}
-                  onChange={(event) => handlePhoneChange(event.target.value)}
-                  onKeyDown={handlePhoneKeyDown}
-                  required
-                />
-              </div>
-              {phone && !normalizedPhone ? (
-                <p className="text-xs text-red-600 dark:text-red-400">
-                  Use 07XXXXXXXX, 2547XXXXXXXX, or +2547XXXXXXXX.
-                </p>
-              ) : null}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="amount">Amount</Label>
-              <div className="rounded-xl border bg-background px-4 py-4">
-                <div className="mb-1 text-center text-xs font-medium text-muted-foreground">KES</div>
-                <Input
-                  ref={amountRef}
-                  id="amount"
-                  className="h-20 border-0 bg-transparent text-center text-5xl font-semibold tracking-normal shadow-none focus-visible:ring-0"
-                  inputMode="numeric"
-                  min="1"
-                  step="1"
-                  type="number"
-                  value={amount}
-                  onChange={(event) => handleAmountChange(event.target.value)}
-                  required
-                />
-              </div>
-            </div>
-          </div>
-
-          <Button
-            className="mt-6 h-16 w-full rounded-xl text-lg font-semibold tracking-wide shadow-lg shadow-primary/20 transition-all duration-200 active:scale-[0.99]"
-            type="submit"
-            disabled={isSubmitting || !canPay}
+      <section
+        className={`mx-auto grid min-h-[calc(100vh-40px)] gap-5 pt-14 lg:h-[calc(100vh-40px)] lg:min-h-0 lg:pt-0 ${
+          isSimpleMode
+            ? 'max-w-3xl place-items-center lg:grid-cols-1'
+            : 'max-w-6xl lg:grid-cols-[minmax(0,1fr)_390px]'
+        }`}
+      >
+        <div className="py-1 pr-1 lg:flex lg:min-h-0 lg:items-center lg:overflow-y-auto">
+          <form
+            className={`w-full rounded-xl border bg-card p-6 shadow-xl shadow-black/5 transition-all duration-200 sm:p-8 ${
+              displayStatus === 'success' ? 'border-emerald-300 payment-success-glow dark:border-emerald-900' : ''
+            }`}
+            onSubmit={handleSubmit}
           >
-            {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <Send className="h-6 w-6" />}
-            PAY
-          </Button>
-
-          <PaymentStatePanel
-            status={displayStatus}
-            message={message}
-            transaction={currentTransaction}
-            onRetry={handleRetryTransaction}
-          />
-        </form>
-
-        <section className="rounded-xl border bg-card p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold">Recent transactions</h2>
-              <p className="text-xs text-muted-foreground">Tap a row for receipt details.</p>
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Payment terminal</p>
+                <h1 className="mt-1 text-2xl font-semibold tracking-normal">Collect M-Pesa payment</h1>
+              </div>
+              <StatusPill status={displayStatus} />
             </div>
-            <ReceiptText className="h-4 w-4 text-muted-foreground" />
-          </div>
 
-          <div className="space-y-2">
-            {transactions.length ? (
-              transactions.map((transaction) => (
-                <button
-                  className="grid w-full grid-cols-[1fr_auto] gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  key={transaction.id}
-                  type="button"
-                  onClick={() => setSelectedTransactionId(transaction.id)}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{formatPhoneForReceipt(transaction.phone)}</p>
-                    <p className="text-xs text-muted-foreground">{formatTimestamp(transaction.created_at)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold">{formatCurrency(transaction.amount)}</p>
-                    <StatusPill status={transaction.status || 'pending_pin'} />
-                  </div>
-                </button>
-              ))
-            ) : (
-              <p className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
-                No transactions yet.
-              </p>
-            )}
-          </div>
-        </section>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Customer phone</Label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    ref={phoneRef}
+                    id="phone"
+                    className="h-14 rounded-lg pl-12 text-xl tracking-normal"
+                    inputMode="tel"
+                    placeholder="0712 345 678"
+                    value={phone}
+                    onChange={(event) => handlePhoneChange(event.target.value)}
+                    onKeyDown={handlePhoneKeyDown}
+                    required
+                  />
+                </div>
+                {phone && !normalizedPhone ? (
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    Use a Safaricom 07XX or 01XX number assigned to STK Push.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="amount">Amount</Label>
+                <div className="rounded-xl border bg-background px-4 py-4">
+                  <div className="mb-1 text-center text-xs font-medium text-muted-foreground">KES</div>
+                  <Input
+                    ref={amountRef}
+                    id="amount"
+                    className="h-20 border-0 bg-transparent text-center text-5xl font-semibold tracking-normal shadow-none focus-visible:ring-0"
+                    inputMode="numeric"
+                    min="1"
+                    step="1"
+                    type="number"
+                    value={amount}
+                    onChange={(event) => handleAmountChange(event.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Button
+              className="mt-6 h-16 w-full rounded-xl text-lg font-semibold tracking-wide shadow-lg shadow-primary/20 transition-all duration-200 active:scale-[0.99]"
+              type="submit"
+              disabled={isSubmitting || !canPay}
+            >
+              {isSubmitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <Send className="h-6 w-6" />}
+              PAY
+            </Button>
+
+            <PaymentStatePanel
+              status={displayStatus}
+              message={message}
+              transaction={currentTransaction}
+              onRetry={handleRetryTransaction}
+            />
+          </form>
+        </div>
+
+        {!isSimpleMode ? (
+          <section className="flex min-h-[360px] flex-col rounded-xl border bg-card p-4 shadow-sm lg:min-h-0">
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Recent transactions</h2>
+                <p className="text-xs text-muted-foreground">Tap a row for receipt details.</p>
+              </div>
+              <ReceiptText className="h-4 w-4 text-muted-foreground" />
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+              {transactions.length ? (
+                visibleTransactions.map((transaction) => (
+                  <button
+                    className="grid w-full grid-cols-[1fr_auto] gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    key={transaction.id}
+                    type="button"
+                    onClick={() => setSelectedTransactionId(transaction.id)}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{formatPhoneForReceipt(transaction.phone)}</p>
+                      <p className="text-xs text-muted-foreground">{formatTimestamp(transaction.created_at)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">{formatCurrency(transaction.amount)}</p>
+                      <StatusPill status={transaction.status || 'pending_pin'} />
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <p className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
+                  No transactions yet.
+                </p>
+              )}
+            </div>
+
+            {hiddenTransactionCount ? (
+              <Button
+                className="mt-3 h-9 shrink-0"
+                type="button"
+                variant="outline"
+                onClick={() => setIsHistoryExpanded((current) => !current)}
+              >
+                {isHistoryExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {isHistoryExpanded ? 'Show less' : `See more (${hiddenTransactionCount})`}
+              </Button>
+            ) : null}
+          </section>
+        ) : null}
       </section>
 
       {selectedTransaction ? (
@@ -315,7 +460,20 @@ export function CashierDashboard({ onLogout, onRefreshTransactions, profile, tra
         />
       ) : null}
 
-      <div className="fixed bottom-3 right-4 text-xs text-muted-foreground">v{version}</div>
+      {isSettingsOpen ? (
+        <CashierSettingsModal
+          cashierMode={cashierMode}
+          onClose={() => setIsSettingsOpen(false)}
+          onModeChange={(nextMode) => {
+            onCashierModeChange?.(nextMode);
+            setIsSettingsOpen(false);
+          }}
+        />
+      ) : null}
+
+      {isAboutOpen ? <AboutModal onClose={() => setIsAboutOpen(false)} /> : null}
+
+      {!isSimpleMode ? <div className="fixed bottom-3 right-4 text-xs text-muted-foreground">v{version}</div> : null}
     </main>
   );
 }
@@ -459,21 +617,30 @@ function formatKenyanPhoneInput(value) {
     return [digits.slice(0, 4), digits.slice(4, 7), digits.slice(7, 10)].filter(Boolean).join(' ');
   }
 
+  if ((digits.startsWith('7') || digits.startsWith('1')) && digits.length <= 9) {
+    return [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 9)].filter(Boolean).join(' ');
+  }
+
   return digits;
 }
 
 function normalizeKenyanPhone(value) {
   const digits = String(value || '').replace(/\D/g, '');
+  let localDigits = '';
 
-  if (/^07\d{8}$/.test(digits)) {
-    return `254${digits.slice(1)}`;
+  if (/^0(7|1)\d{8}$/.test(digits)) {
+    localDigits = digits;
+  } else if (/^254(7|1)\d{8}$/.test(digits)) {
+    localDigits = `0${digits.slice(3)}`;
+  } else if (/^(7|1)\d{8}$/.test(digits)) {
+    localDigits = `0${digits}`;
   }
 
-  if (/^2547\d{8}$/.test(digits)) {
-    return digits;
+  if (!localDigits || !SAFARICOM_PREFIXES.has(localDigits.slice(0, 4))) {
+    return '';
   }
 
-  return '';
+  return `254${localDigits.slice(1)}`;
 }
 
 function ensurePaymentRequestKey(ref) {
@@ -488,7 +655,7 @@ function ensurePaymentRequestKey(ref) {
 
 function formatPhoneForReceipt(value) {
   const digits = String(value || '').replace(/\D/g, '');
-  if (/^2547\d{8}$/.test(digits)) {
+  if (/^254(7|1)\d{8}$/.test(digits)) {
     return `+254 ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
   }
   return value || '-';

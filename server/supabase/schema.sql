@@ -6,6 +6,7 @@ create table if not exists public.branches (
   till_number text,
   shortcode text,
   daraja_passkey text,
+  color_code text not null default '#059669' check (color_code ~ '^#[0-9A-Fa-f]{6}$'),
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -83,8 +84,31 @@ create table if not exists public.logs (
 alter table public.branches add column if not exists till_number text;
 alter table public.branches add column if not exists shortcode text;
 alter table public.branches add column if not exists daraja_passkey text;
+alter table public.branches add column if not exists color_code text not null default '#059669';
 alter table public.branches add column if not exists active boolean not null default true;
 alter table public.branches add column if not exists updated_at timestamptz not null default now();
+
+update public.branches
+  set color_code = '#059669'
+  where color_code is null
+    or color_code !~ '^#[0-9A-Fa-f]{6}$';
+
+alter table public.branches alter column color_code set default '#059669';
+alter table public.branches alter column color_code set not null;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.branches'::regclass
+      and conname = 'branches_color_code_check'
+  ) then
+    alter table public.branches
+      add constraint branches_color_code_check
+      check (color_code ~ '^#[0-9A-Fa-f]{6}$');
+  end if;
+end $$;
 
 alter table public.users add column if not exists branch_id uuid references public.branches(id);
 

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format, isValid, parseISO } from 'date-fns';
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   XAxis,
@@ -18,7 +18,7 @@ import {
   Building2,
   CalendarDays,
   CircleDollarSign,
-  CreditCard,
+  Info,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -39,7 +39,9 @@ import {
 } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AboutModal } from '@/components/AboutModal';
 import { StatusPill } from '@/components/StatusPill';
+import { appName, iconPath } from '@/config/branding';
 import { api } from '@/lib/apiClient';
 
 const emptyDashboard = {
@@ -81,8 +83,21 @@ const chartConfig = {
   total_count: { label: 'Volume', color: 'hsl(var(--accent))' }
 };
 
+const defaultBranchColor = '#059669';
+const branchColorOptions = [
+  '#059669',
+  '#2563EB',
+  '#DC2626',
+  '#D97706',
+  '#7C3AED',
+  '#0891B2',
+  '#DB2777',
+  '#4F46E5'
+];
+
 export function AdminDashboard({ onLogout, profile }) {
   const [activePage, setActivePage] = useState('dashboard');
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [dashboard, setDashboard] = useState(emptyDashboard);
   const [cashiers, setCashiers] = useState([]);
   const [range, setRange] = useState('last_7_days');
@@ -97,6 +112,7 @@ export function AdminDashboard({ onLogout, profile }) {
     status: ''
   });
   const [branchForm, setBranchForm] = useState({
+    color_code: defaultBranchColor,
     email: '',
     name: '',
     passkey: '',
@@ -203,6 +219,7 @@ export function AdminDashboard({ onLogout, profile }) {
     try {
       const { data } = await api.post('/api/branches', branchForm);
       setBranchForm({
+        color_code: defaultBranchColor,
         email: '',
         name: '',
         passkey: '',
@@ -270,11 +287,11 @@ export function AdminDashboard({ onLogout, profile }) {
       <aside className="hidden h-screen w-64 shrink-0 border-r bg-card/70 backdrop-blur xl:flex xl:flex-col">
         <div className="border-b px-4 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <CreditCard className="h-3.5 w-3.5" />
+            <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-md bg-primary text-primary-foreground">
+              <img alt="" className="h-full w-full object-cover" src={iconPath} />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">Mwangiz STK</p>
+              <p className="truncate text-sm font-semibold">{appName}</p>
               <p className="truncate text-xs text-muted-foreground">{profile?.email}</p>
             </div>
           </div>
@@ -303,6 +320,10 @@ export function AdminDashboard({ onLogout, profile }) {
         </nav>
 
         <div className="border-t p-3">
+          <Button className="mb-2 h-9 w-full justify-start" variant="outline" onClick={() => setIsAboutOpen(true)}>
+            <Info className="h-4 w-4" />
+            About
+          </Button>
           <Button className="h-9 w-full justify-start" variant="outline" onClick={onLogout}>
             <LogOut className="h-4 w-4" />
             Logout
@@ -333,6 +354,10 @@ export function AdminDashboard({ onLogout, profile }) {
               <Button className="h-9" variant="outline" onClick={refreshAll} disabled={isLoading}>
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
                 Refresh
+              </Button>
+              <Button className="h-9" variant="outline" onClick={() => setIsAboutOpen(true)}>
+                <Info className="h-4 w-4" />
+                About
               </Button>
               <Button className="h-9" variant="outline" onClick={onLogout}>
                 <LogOut className="h-4 w-4" />
@@ -392,6 +417,7 @@ export function AdminDashboard({ onLogout, profile }) {
           ) : null}
         </div>
       </section>
+      {isAboutOpen ? <AboutModal onClose={() => setIsAboutOpen(false)} /> : null}
     </main>
   );
 }
@@ -400,9 +426,13 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
   const totals = dashboard.totals || emptyDashboard.totals;
   const revenueData = (dashboard.revenue_over_time || []).map((item) => ({
     ...item,
+    total_amount: Number(item.total_amount || 0),
     chart_label: formatSeriesLabel(item.label)
   }));
-  const branchData = (dashboard.branch_performance || []).slice(0, 8);
+  const branchData = (dashboard.branch_performance || []).slice(0, 8).map((item, index) => ({
+    ...item,
+    fill: getBranchColor(item, index)
+  }));
   const successFailedData = [
     { fill: '#059669', name: 'Success', value: Number(totals.success_count || 0) },
     { fill: '#dc2626', name: 'Failed', value: Number(totals.failed_count || 0) }
@@ -458,30 +488,50 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
             <CardDescription>Gross payment value across the selected period.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer className="h-[240px] w-full" config={chartConfig}>
-              <AreaChart data={revenueData} margin={{ bottom: 0, left: 0, right: 10, top: 6 }}>
-                <defs>
-                  <linearGradient id="revenueFill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.28} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="chart_label" tickLine={false} axisLine={false} tickMargin={8} />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactCurrency} width={58} />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent formatter={(value) => formatCurrency(value)} />}
-                />
-                <Area
-                  dataKey="total_amount"
-                  fill="url(#revenueFill)"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  type="monotone"
-                />
-              </AreaChart>
-            </ChartContainer>
+            {revenueData.length ? (
+              <ChartContainer
+                className="h-[260px] w-full rounded-md border bg-background p-2"
+                config={chartConfig}
+              >
+                <LineChart data={revenueData} margin={{ bottom: 0, left: 0, right: 10, top: 12 }}>
+                  <CartesianGrid strokeDasharray="2 10" vertical={false} />
+                  <XAxis dataKey="chart_label" tickLine={false} axisLine={false} tickMargin={8} />
+                  <YAxis
+                    domain={['auto', 'auto']}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={formatCompactCurrency}
+                    width={58}
+                  />
+                  <ChartTooltip
+                    cursor={{ stroke: 'hsl(var(--primary))', strokeDasharray: '4 4', strokeWidth: 1 }}
+                    content={<ChartTooltipContent formatter={(value) => formatCurrency(value)} />}
+                  />
+                  <Line
+                    activeDot={{
+                      r: 6,
+                      fill: 'hsl(var(--background))',
+                      stroke: 'hsl(var(--primary))',
+                      strokeWidth: 3
+                    }}
+                    dataKey="total_amount"
+                    dot={{
+                      r: 3,
+                      fill: 'hsl(var(--background))',
+                      stroke: 'hsl(var(--primary))',
+                      strokeWidth: 2
+                    }}
+                    stroke="hsl(var(--primary))"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={3}
+                    type="monotone"
+                  />
+                </LineChart>
+              </ChartContainer>
+            ) : (
+              <EmptyState label="No revenue trend data for this range." />
+            )}
           </CardContent>
         </Card>
 
@@ -536,7 +586,11 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
                     content={<ChartTooltipContent formatter={(value) => formatCurrency(value)} />}
                     cursor={false}
                   />
-                  <Bar dataKey="total_amount" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="total_amount" radius={[0, 4, 4, 0]}>
+                    {branchData.map((entry) => (
+                      <Cell fill={entry.fill} key={entry.branch_id || entry.branch_name} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ChartContainer>
             ) : (
@@ -711,6 +765,11 @@ function BranchSetupPage({
                 onChange={(value) => setBranchForm((current) => ({ ...current, name: value }))}
                 required
               />
+              <ColorField
+                label="Graph color"
+                value={branchForm.color_code}
+                onChange={(value) => setBranchForm((current) => ({ ...current, color_code: value }))}
+              />
               <TextField
                 label="Branch user email"
                 type="email"
@@ -768,6 +827,11 @@ function BranchSetupPage({
                   onChange={(value) => setEditingBranch((current) => ({ ...current, name: value }))}
                   required
                 />
+                <ColorField
+                  label="Graph color"
+                  value={editingBranch.color_code || defaultBranchColor}
+                  onChange={(value) => setEditingBranch((current) => ({ ...current, color_code: value }))}
+                />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <TextField
                     label="Till number"
@@ -818,6 +882,11 @@ function BranchSetupPage({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            aria-hidden="true"
+                            className="h-3 w-3 rounded-sm border"
+                            style={{ backgroundColor: getBranchColor(branch, 0) }}
+                          />
                           <p className="truncate text-sm font-medium">{branch.name}</p>
                           <Badge variant="outline">Active</Badge>
                         </div>
@@ -829,7 +898,17 @@ function BranchSetupPage({
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <Button className="h-8 w-8" size="icon" variant="outline" onClick={() => setEditingBranch(branch)}>
+                        <Button
+                          className="h-8 w-8"
+                          size="icon"
+                          variant="outline"
+                          onClick={() =>
+                            setEditingBranch({
+                              ...branch,
+                              color_code: isHexColor(branch.color_code) ? branch.color_code : defaultBranchColor
+                            })
+                          }
+                        >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button className="h-8 w-8" size="icon" variant="destructive" onClick={() => handleDeleteBranch(branch)}>
@@ -951,6 +1030,50 @@ function TextField({ label, onChange, value, ...props }) {
   );
 }
 
+function ColorField({ label, onChange, value }) {
+  const id = label.toLowerCase().replaceAll(' ', '-');
+  const colorValue = isHexColor(value) ? value : defaultBranchColor;
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs" htmlFor={id}>{label}</Label>
+      <div className="grid grid-cols-[46px_1fr] gap-2">
+        <Input
+          aria-label={label}
+          className="h-9 cursor-pointer bg-background p-1"
+          id={id}
+          type="color"
+          value={colorValue.toLowerCase()}
+          onChange={(event) => onChange(event.target.value.toUpperCase())}
+        />
+        <Input
+          className="h-9 bg-background font-mono text-xs uppercase"
+          maxLength={7}
+          pattern="^#[0-9A-Fa-f]{6}$"
+          placeholder={defaultBranchColor}
+          value={value || ''}
+          onChange={(event) => onChange(event.target.value.toUpperCase())}
+        />
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {branchColorOptions.map((color) => (
+          <button
+            aria-label={`Use ${color}`}
+            className={`h-5 w-5 rounded-sm border transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              colorValue.toUpperCase() === color ? 'ring-2 ring-ring ring-offset-2 ring-offset-background' : ''
+            }`}
+            key={color}
+            style={{ backgroundColor: color }}
+            title={color}
+            type="button"
+            onClick={() => onChange(color)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({ label }) {
   return (
     <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
@@ -961,6 +1084,18 @@ function EmptyState({ label }) {
 
 function formatCurrency(value) {
   return `KES ${Number(value || 0).toLocaleString()}`;
+}
+
+function getBranchColor(branch, index = 0) {
+  if (isHexColor(branch?.color_code)) {
+    return branch.color_code;
+  }
+
+  return branchColorOptions[index % branchColorOptions.length] || defaultBranchColor;
+}
+
+function isHexColor(value) {
+  return /^#[0-9a-f]{6}$/i.test(String(value || ''));
 }
 
 function formatCompactCurrency(value) {

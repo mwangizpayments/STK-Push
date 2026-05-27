@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Eye, EyeOff, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Loader2, Mail, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { appName, iconPath } from '@/config/branding';
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient';
 
 const LAST_EMAIL_KEY = 'mpesa:last-email';
@@ -48,11 +49,11 @@ export function LoginScreen({ bootError = '', onSession }) {
     <main className="flex min-h-screen items-center justify-center overflow-hidden bg-[linear-gradient(135deg,hsl(var(--background)),hsl(var(--secondary)/0.48))] p-6 text-foreground">
       <section className="w-full max-w-[420px] rounded-lg border bg-card/95 p-7 shadow-xl shadow-black/5 backdrop-blur transition-all duration-200">
         <div className="mb-7 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
-            <LockKeyhole className="h-5 w-5" aria-hidden="true" />
+          <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md bg-primary text-primary-foreground shadow-sm">
+            <img alt="" className="h-full w-full object-cover" src={iconPath} />
           </div>
           <div>
-            <h1 className="text-xl font-semibold tracking-normal">M-Pesa STK Desktop</h1>
+            <h1 className="text-xl font-semibold tracking-normal">{appName}</h1>
             <p className="text-sm text-muted-foreground">Secure cashier and admin access</p>
           </div>
         </div>

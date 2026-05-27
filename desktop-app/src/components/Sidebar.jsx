@@ -3,6 +3,7 @@ import { Building2, Clock3, LayoutDashboard, LogOut, ShieldCheck } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RecentTransactions } from '@/components/RecentTransactions';
+import { appName } from '@/config/branding';
 
 export function Sidebar({
   activeView,
@@ -12,7 +13,7 @@ export function Sidebar({
   profile,
   transactions
 }) {
-  const [version, setVersion] = useState('0.1.0');
+  const [version, setVersion] = useState('1.0.0');
 
   useEffect(() => {
     window.mpesaDesktop?.appVersion?.().then(setVersion).catch(() => {});
@@ -26,7 +27,7 @@ export function Sidebar({
             <Building2 className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-base font-semibold">Mwangiz STK</p>
+            <p className="truncate text-base font-semibold">{appName}</p>
             <p className="truncate text-xs text-muted-foreground">{profile?.email}</p>
           </div>
         </div>

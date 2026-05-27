@@ -1,14 +1,30 @@
 {
   "name": "desktop-app",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "M-PESA STK Terminal desktop point-of-sale app",
   "private": true,
   "main": "electron/main.cjs",
   "type": "module",
+  "author": {
+    "name": "Mwangiz Payments"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mwangizpayments/STK-Push.git"
+  },
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on tcp:5173 && node electron/launch.cjs --dev\"",
     "dev:vite": "vite --host 127.0.0.1 --port 5173",
     "start": "node electron/launch.cjs",
-    "build": "vite build",
+    "build:renderer": "vite build",
+    "prebuild": "npm run build:renderer",
+    "build": "cross-env NODE_ENV=production ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder",
+    "predist:win": "npm run build:renderer",
+    "dist:win": "cross-env NODE_ENV=production ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder --win nsis",
+    "predist:win:portable": "npm run build:renderer",
+    "dist:win:portable": "cross-env NODE_ENV=production ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder --win nsis portable",
+    "prerelease": "npm run build:renderer",
+    "release": "cross-env NODE_ENV=production ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder --win nsis --publish always",
     "preview": "vite preview --host 127.0.0.1 --port 4173"
   },
   "dependencies": {
@@ -18,6 +34,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.3.0",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -28,10 +45,98 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",
-    "electron": "^33.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "33.4.11",
+    "electron-builder": "^26.8.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "vite": "^5.4.11",
     "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.mwangiz.stkterminal",
+    "productName": "M-PESA STK Terminal",
+    "copyright": "Copyright 2026 Mwangiz Payments",
+    "asar": true,
+    "compression": "store",
+    "electronVersion": "33.4.11",
+    "electronDist": "../node_modules/electron/dist",
+    "toolsets": {
+      "winCodeSign": "1.1.0"
+    },
+    "directories": {
+      "buildResources": "build-resources",
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer-dist/**/*",
+      "public/branding/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "public/branding",
+        "to": "branding",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mwangizpayments",
+        "repo": "STK-Push",
+        "releaseType": "release",
+        "channel": "latest"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "icon": "public/branding/icon-placeholder.png",
+      "requestedExecutionLevel": "asInvoker",
+      "signAndEditExecutable": true,
+      "forceCodeSigning": false,
+      "verifyUpdateCodeSignature": true,
+      "signtoolOptions": {
+        "certificateFile": null,
+        "certificatePassword": null,
+        "certificateSha1": null,
+        "certificateSubjectName": null,
+        "publisherName": "Mwangiz Payments",
+        "signingHashAlgorithms": [
+          "sha256"
+        ],
+        "timeStampServer": "http://timestamp.digicert.com",
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "perMachine": false,
+      "guid": "6E5B3FA4-2C18-4C8D-9F6D-8B0C9A7D2E11",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "M-PESA STK Terminal",
+      "uninstallDisplayName": "M-PESA STK Terminal",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "differentialPackage": true,
+      "useZip": true,
+      "installerIcon": "public/branding/icon-placeholder.png",
+      "uninstallerIcon": "public/branding/icon-placeholder.png",
+      "installerHeaderIcon": "public/branding/icon-placeholder.png"
+    }
   }
 }

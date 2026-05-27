@@ -3,14 +3,23 @@ import { env } from '../config/env.js';
 import { supabase } from '../config/supabase.js';
 
 const memoryBranches = [];
-const BRANCH_SELECT = 'id, name, till_number, shortcode, active, created_at, updated_at';
+const DEFAULT_BRANCH_COLOR = '#059669';
+const BRANCH_SELECT = 'id, name, till_number, shortcode, color_code, active, created_at, updated_at';
 
-export async function createBranch({ active = true, darajaPasskey, name, shortcode, tillNumber }) {
+export async function createBranch({
+  active = true,
+  colorCode = DEFAULT_BRANCH_COLOR,
+  darajaPasskey,
+  name,
+  shortcode,
+  tillNumber
+}) {
   const branch = {
     id: crypto.randomUUID(),
     name,
     till_number: tillNumber || null,
     shortcode: shortcode || null,
+    color_code: colorCode || DEFAULT_BRANCH_COLOR,
     active,
     created_at: new Date().toISOString()
   };
@@ -87,6 +96,10 @@ export async function updateBranch(id, payload) {
 
   if ('tillNumber' in payload) {
     patch.till_number = payload.tillNumber || null;
+  }
+
+  if ('colorCode' in payload) {
+    patch.color_code = payload.colorCode || DEFAULT_BRANCH_COLOR;
   }
 
   if (payload.darajaPasskey) {

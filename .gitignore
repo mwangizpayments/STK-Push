@@ -1,5 +1,6 @@
 node_modules/
 dist/
+renderer-dist/
 build/
 .vite/
 .env
@@ -12,4 +13,4 @@ pnpm-debug.log*
 coverage/
 .DS_Store
 Thumbs.db
-
+temp_make_brioneroo_admin.sql

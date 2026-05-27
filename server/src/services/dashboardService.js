@@ -91,9 +91,11 @@ function buildBranchPerformance(transactions, branchMap) {
 
   for (const transaction of transactions) {
     const isSuccess = transaction.status === TRANSACTION_STATES.SUCCESS;
+    const branch = branchMap.get(transaction.branch_id);
     const current = byBranch.get(transaction.branch_id) || {
       branch_id: transaction.branch_id,
-      branch_name: branchMap.get(transaction.branch_id)?.name || 'Unknown branch',
+      branch_name: branch?.name || 'Unknown branch',
+      color_code: branch?.color_code || '#059669',
       failed_count: 0,
       success_count: 0,
       total_amount: 0,
