@@ -596,9 +596,13 @@ function TransactionsPage({ branchMap, branches, filters, pagination, setFilter,
             </SelectField>
             <SelectField label="Status" value={filters.status} onChange={(value) => setFilter('status', value)}>
               <option value="">All statuses</option>
-              <option value="pending">Pending</option>
+              <option value="created">Created</option>
+              <option value="pending_pin">Waiting PIN</option>
+              <option value="processing">Processing</option>
               <option value="success">Success</option>
               <option value="failed">Failed</option>
+              <option value="timeout">Timeout</option>
+              <option value="cancelled">Cancelled</option>
             </SelectField>
             <DateField label="From" value={filters.date_from} onChange={(value) => setFilter('date_from', value)} />
             <DateField label="To" value={filters.date_to} onChange={(value) => setFilter('date_to', value)} />

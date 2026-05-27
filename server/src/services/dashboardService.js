@@ -1,5 +1,6 @@
 import { listBranches } from './branchRepository.js';
 import { listTransactions } from './transactionRepository.js';
+import { ACTIVE_TRANSACTION_STATES, TRANSACTION_STATES } from './transactionState.js';
 
 export async function getDashboardStats({ branchId } = {}) {
   return getDashboardStatsForRange({ branchId });
@@ -19,11 +20,12 @@ export async function getDashboardStatsForRange({ branchId, dateFrom, dateTo, ra
 
   const totals = transactions.reduce(
     (summary, transaction) => {
+      const isSuccess = transaction.status === TRANSACTION_STATES.SUCCESS;
       summary.total_count += 1;
-      summary.total_amount += Number(transaction.amount || 0);
-      summary.pending_count += transaction.status === 'pending' ? 1 : 0;
-      summary.success_count += transaction.status === 'success' ? 1 : 0;
-      summary.failed_count += transaction.status === 'failed' ? 1 : 0;
+      summary.total_amount += isSuccess ? Number(transaction.amount || 0) : 0;
+      summary.pending_count += isPendingStatus(transaction.status) ? 1 : 0;
+      summary.success_count += isSuccess ? 1 : 0;
+      summary.failed_count += isFailedStatus(transaction.status) ? 1 : 0;
       return summary;
     },
     {
@@ -88,6 +90,7 @@ function buildBranchPerformance(transactions, branchMap) {
   const byBranch = new Map();
 
   for (const transaction of transactions) {
+    const isSuccess = transaction.status === TRANSACTION_STATES.SUCCESS;
     const current = byBranch.get(transaction.branch_id) || {
       branch_id: transaction.branch_id,
       branch_name: branchMap.get(transaction.branch_id)?.name || 'Unknown branch',
@@ -98,9 +101,9 @@ function buildBranchPerformance(transactions, branchMap) {
     };
 
     current.total_count += 1;
-    current.total_amount += Number(transaction.amount || 0);
-    current.success_count += transaction.status === 'success' ? 1 : 0;
-    current.failed_count += transaction.status === 'failed' ? 1 : 0;
+    current.total_amount += isSuccess ? Number(transaction.amount || 0) : 0;
+    current.success_count += isSuccess ? 1 : 0;
+    current.failed_count += isFailedStatus(transaction.status) ? 1 : 0;
     byBranch.set(transaction.branch_id, current);
   }
 
@@ -117,7 +120,8 @@ function buildRevenueSeries(transactions, range) {
       ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
       : date.toISOString().slice(0, 10);
     const current = buckets.get(key) || { label: key, total_amount: 0, total_count: 0 };
-    current.total_amount += Number(transaction.amount || 0);
+    current.total_amount +=
+      transaction.status === TRANSACTION_STATES.SUCCESS ? Number(transaction.amount || 0) : 0;
     current.total_count += 1;
     buckets.set(key, current);
   }
@@ -142,6 +146,18 @@ function calculateRate(part, total) {
   }
 
   return Math.round((Number(part || 0) / Number(total)) * 100);
+}
+
+function isPendingStatus(status) {
+  return status === 'pending' || ACTIVE_TRANSACTION_STATES.includes(status);
+}
+
+function isFailedStatus(status) {
+  return [
+    TRANSACTION_STATES.FAILED,
+    TRANSACTION_STATES.TIMEOUT,
+    TRANSACTION_STATES.CANCELLED
+  ].includes(status);
 }
 
 function daysBetween(start, end) {

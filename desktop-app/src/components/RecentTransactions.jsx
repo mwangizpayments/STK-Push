@@ -9,7 +9,7 @@ export function RecentTransactions({ transactions = [] }) {
     <div className="space-y-2">
       {transactions.slice(0, 6).map((transaction) => (
         <div
-          className="rounded-md border bg-white px-3 py-2"
+          className="rounded-md border bg-card px-3 py-2"
           key={transaction.id || transaction.checkout_request_id}
         >
           <div className="flex items-start justify-between gap-3">
@@ -19,11 +19,10 @@ export function RecentTransactions({ transactions = [] }) {
                 KES {Number(transaction.amount || 0).toLocaleString()}
               </p>
             </div>
-            <StatusPill status={transaction.status || 'pending'} />
+            <StatusPill status={transaction.status || 'pending_pin'} />
           </div>
         </div>
       ))}
     </div>
   );
 }
-

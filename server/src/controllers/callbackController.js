@@ -1,6 +1,7 @@
-import { updateTransactionFromCallback } from '../services/transactionRepository.js';
 import { env } from '../config/env.js';
-import { httpError } from '../utils/httpError.js';
+import { createLog } from '../services/logRepository.js';
+import { applyCallbackToTransaction } from '../services/transactionRepository.js';
+import { mapDarajaResult } from '../services/transactionState.js';
 
 export function confirmCallbackUrl(_req, res) {
   res.json({
@@ -12,22 +13,42 @@ export function confirmCallbackUrl(_req, res) {
   });
 }
 
-export async function handleSafaricomCallback(req, res) {
-  const callback = req.body?.Body?.stkCallback || req.body?.stkCallback || req.body;
+export function handleSafaricomCallback(req, res) {
+  const payload = req.body || {};
+
+  res.status(200).json({
+    received: true
+  });
+
+  setImmediate(() => {
+    processSafaricomCallback(payload).catch((error) => {
+      console.error(`Safaricom callback processing failed: ${error.message}`);
+    });
+  });
+}
+
+async function processSafaricomCallback(payload) {
+  const callback = payload?.Body?.stkCallback || payload?.stkCallback || payload;
   const checkoutRequestId = callback.CheckoutRequestID || callback.checkout_request_id;
 
+  console.log(`Safaricom raw callback: ${JSON.stringify(payload)}`);
+
   if (!checkoutRequestId) {
-    throw httpError(400, 'CheckoutRequestID is required');
+    console.warn('Safaricom callback ignored: missing CheckoutRequestID');
+    await createLog({
+      level: 'error',
+      message: 'Safaricom callback ignored: missing CheckoutRequestID'
+    });
+    return;
   }
 
   const resultCode = Number(callback.ResultCode ?? callback.result_code);
-  const status = resultCode === 0 ? 'success' : 'failed';
   const metadata = callback.CallbackMetadata?.Item || [];
   const receiptNumber = findMetadataValue(metadata, 'MpesaReceiptNumber');
-  const failureReason = status === 'failed' ? callback.ResultDesc || 'Payment failed' : null;
+  const { failureReason, status } = mapDarajaResult({ resultCode });
 
-  const transaction = await updateTransactionFromCallback({
-    callbackPayload: req.body,
+  const result = await applyCallbackToTransaction({
+    callbackPayload: payload,
     checkoutRequestId,
     failureReason,
     receiptNumber,
@@ -35,14 +56,25 @@ export async function handleSafaricomCallback(req, res) {
     status
   });
 
-  console.log(
-    `Safaricom callback received: checkout=${checkoutRequestId}, result_code=${resultCode}, status=${status}, updated=${Boolean(transaction)}`
-  );
+  if (result.duplicate) {
+    console.warn(
+      `Duplicate Safaricom callback ignored: checkout=${checkoutRequestId}, receipt=${receiptNumber || 'none'}, reason=${result.reason}`
+    );
+    await createLog({
+      level: 'info',
+      message: `Duplicate Safaricom callback ignored: checkout=${checkoutRequestId}, receipt=${receiptNumber || 'none'}, reason=${result.reason}`,
+      transactionId: result.transaction?.id || null
+    });
+    return;
+  }
 
-  res.json({
-    received: true,
-    status,
-    transaction
+  console.log(
+    `Safaricom callback processed: checkout=${checkoutRequestId}, result_code=${resultCode}, status=${status}, updated=${Boolean(result.transaction)}`
+  );
+  await createLog({
+    level: status === 'success' ? 'info' : 'error',
+    message: `Safaricom callback processed: checkout=${checkoutRequestId}, result_code=${resultCode}, status=${status}`,
+    transactionId: result.transaction?.id || null
   });
 }
 

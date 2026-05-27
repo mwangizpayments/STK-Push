@@ -18,6 +18,7 @@ export const env = {
   allowMemoryFallback:
     (process.env.ALLOW_MEMORY_FALLBACK || (process.env.NODE_ENV === 'production' ? 'false' : 'true')) ===
     'true',
+  paymentTimeoutMs: Number(process.env.PAYMENT_TIMEOUT_MS || 90000),
   supabase: {
     url: process.env.SUPABASE_URL || '',
     anonKey: process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '',

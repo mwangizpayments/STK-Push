@@ -67,4 +67,25 @@
   .recharts-polar-grid [stroke="#ccc"] {
     stroke: hsl(var(--border));
   }
+
+  @keyframes success-pop {
+    0% {
+      opacity: 0.6;
+      transform: scale(0.86);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .success-check {
+    animation: success-pop 180ms ease-out;
+  }
+
+  .payment-success-glow {
+    box-shadow:
+      0 0 0 1px hsl(152 61% 44% / 0.14),
+      0 18px 48px hsl(152 61% 44% / 0.14);
+  }
 }

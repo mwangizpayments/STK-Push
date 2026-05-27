@@ -1,6 +1,12 @@
 import { requestStkPush } from '../services/darajaService.js';
 import { env } from '../config/env.js';
-import { createTransaction, updateTransactionFromCallback } from '../services/transactionRepository.js';
+import {
+  createTransaction,
+  markTransactionRequestFailed,
+  markTransactionStkAccepted,
+  scheduleTransactionTimeout,
+  updateTransactionFromCallback
+} from '../services/transactionRepository.js';
 import { httpError } from '../utils/httpError.js';
 import { normalizeAmount, normalizeMpesaPhone, requireUuid } from '../utils/validators.js';
 
@@ -19,30 +25,48 @@ export async function createStkPush(req, res) {
     branchId = requireUuid(req.body.branch_id, 'branch_id');
   }
 
-  const stk = await requestStkPush({
-    amount,
-    phone,
-    transactionId: `${branchId}-${Date.now()}`
-  });
-
-  const transaction = await createTransaction({
+  const createdTransaction = await createTransaction({
     amount,
     branch_id: branchId,
     cashier_id: req.user.id,
     phone,
-    merchant_request_id: stk.MerchantRequestID,
-    checkout_request_id: stk.CheckoutRequestID,
     raw_request: {
       phone,
       amount,
       branch_id: branchId
-    },
-    raw_response: stk
+    }
   });
+
+  let stk;
+
+  try {
+    stk = await requestStkPush({
+      amount,
+      phone,
+      transactionId: createdTransaction.id
+    });
+  } catch (error) {
+    await markTransactionRequestFailed(createdTransaction.id);
+    throw error;
+  }
+
+  const transaction = await markTransactionStkAccepted(createdTransaction.id, {
+    checkoutRequestId: stk.CheckoutRequestID,
+    merchantRequestId: stk.MerchantRequestID,
+    rawResponse: stk
+  });
+
+  if (!transaction) {
+    throw httpError(500, 'Payment transaction could not be updated after STK request');
+  }
 
   console.log(
     `STK Push created: transaction=${transaction.id}, checkout=${stk.CheckoutRequestID}, status=${transaction.status}, mock=${env.daraja.useMock}`
   );
+
+  scheduleTransactionTimeout({
+    checkoutRequestId: stk.CheckoutRequestID
+  });
 
   scheduleMockCompletion({
     amount,
@@ -57,7 +81,7 @@ export async function createStkPush(req, res) {
       checkout_request_id: stk.CheckoutRequestID,
       response_code: stk.ResponseCode,
       response_description: stk.ResponseDescription,
-      customer_message: 'STK request accepted. Waiting for backend callback.',
+      customer_message: 'Waiting for customer PIN.',
       mode: env.daraja.useMock ? 'mock' : 'daraja',
       callback_url_configured: Boolean(env.daraja.callbackUrl)
     }

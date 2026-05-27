@@ -25,7 +25,9 @@ create table if not exists public.transactions (
   cashier_id uuid references auth.users(id),
   phone text not null,
   amount numeric(12, 2) not null check (amount > 0),
-  status text not null default 'pending' check (status in ('pending', 'success', 'failed')),
+  status text not null default 'pending_pin' check (
+    status in ('created', 'pending_pin', 'processing', 'success', 'failed', 'timeout', 'cancelled')
+  ),
   mpesa_receipt text,
   checkout_request_id text unique,
   merchant_request_id text,
@@ -34,6 +36,10 @@ create table if not exists public.transactions (
   raw_request jsonb,
   raw_response jsonb,
   callback_payload jsonb,
+  callback_received_at timestamptz,
+  callback_processed_at timestamptz,
+  callback_attempts integer not null default 0,
+  timeout_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -62,6 +68,36 @@ alter table public.transactions add column if not exists failure_reason text;
 alter table public.transactions add column if not exists raw_request jsonb;
 alter table public.transactions add column if not exists raw_response jsonb;
 alter table public.transactions add column if not exists callback_payload jsonb;
+alter table public.transactions add column if not exists callback_received_at timestamptz;
+alter table public.transactions add column if not exists callback_processed_at timestamptz;
+alter table public.transactions add column if not exists callback_attempts integer not null default 0;
+alter table public.transactions add column if not exists timeout_at timestamptz;
+
+do $$
+declare
+  status_constraint record;
+begin
+  for status_constraint in
+    select conname
+    from pg_constraint
+    where conrelid = 'public.transactions'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) like '%status%'
+  loop
+    execute format('alter table public.transactions drop constraint if exists %I', status_constraint.conname);
+  end loop;
+
+  update public.transactions
+    set status = 'pending_pin'
+    where status = 'pending';
+
+  alter table public.transactions
+    alter column status set default 'pending_pin';
+
+  alter table public.transactions
+    add constraint transactions_status_check
+    check (status in ('created', 'pending_pin', 'processing', 'success', 'failed', 'timeout', 'cancelled'));
+end $$;
 
 do $$
 begin
@@ -162,6 +198,13 @@ create index if not exists transactions_branch_created_idx
   on public.transactions (branch_id, created_at desc);
 create index if not exists transactions_checkout_request_idx
   on public.transactions (checkout_request_id);
+create unique index if not exists transactions_mpesa_receipt_unique_idx
+  on public.transactions (mpesa_receipt)
+  where mpesa_receipt is not null;
+create index if not exists transactions_timeout_idx
+  on public.transactions (timeout_at)
+  where callback_processed_at is null
+    and status in ('created', 'pending_pin', 'processing');
 create index if not exists logs_transaction_idx on public.logs (transaction_id);
 
 alter table public.users enable row level security;
