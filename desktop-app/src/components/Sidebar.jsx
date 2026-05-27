@@ -37,15 +37,6 @@ export function Sidebar({
       </div>
 
       <nav className="space-y-2 px-3 py-4">
-        <Button
-          className="w-full justify-start"
-          variant={activeView === 'cashier' ? 'secondary' : 'ghost'}
-          onClick={() => onViewChange('cashier')}
-        >
-          <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
-          Cashier
-        </Button>
-
         {isAdmin ? (
           <Button
             className="w-full justify-start"
@@ -55,7 +46,16 @@ export function Sidebar({
             <ShieldCheck className="h-4 w-4" aria-hidden="true" />
             Admin
           </Button>
-        ) : null}
+        ) : (
+          <Button
+            className="w-full justify-start"
+            variant={activeView === 'cashier' ? 'secondary' : 'ghost'}
+            onClick={() => onViewChange('cashier')}
+          >
+            <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+            Cashier
+          </Button>
+        )}
       </nav>
 
       <section className="min-h-0 flex-1 overflow-y-auto border-t px-5 py-4">
@@ -76,4 +76,3 @@ export function Sidebar({
     </aside>
   );
 }
-

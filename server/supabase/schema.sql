@@ -5,6 +5,7 @@ create table if not exists public.branches (
   name text not null,
   till_number text,
   shortcode text,
+  daraja_passkey text,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -47,6 +48,7 @@ create table if not exists public.logs (
 
 alter table public.branches add column if not exists till_number text;
 alter table public.branches add column if not exists shortcode text;
+alter table public.branches add column if not exists daraja_passkey text;
 alter table public.branches add column if not exists active boolean not null default true;
 alter table public.branches add column if not exists updated_at timestamptz not null default now();
 
@@ -248,4 +250,3 @@ create policy "Admin full access to logs"
   to authenticated
   using (public.current_app_role() = 'admin')
   with check (public.current_app_role() = 'admin');
-

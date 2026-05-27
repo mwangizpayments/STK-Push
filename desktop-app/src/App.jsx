@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminDashboard } from '@/components/AdminDashboard';
 import { CashierDashboard } from '@/components/CashierDashboard';
 import { LoginScreen } from '@/components/LoginScreen';
-import { Sidebar } from '@/components/Sidebar';
 import { api } from '@/lib/apiClient';
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient';
 
 export default function App() {
-  const [activeView, setActiveView] = useState('cashier');
   const [isBooting, setIsBooting] = useState(true);
+  const [bootError, setBootError] = useState('');
   const [profile, setProfile] = useState(null);
   const [session, setSession] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -25,12 +24,21 @@ export default function App() {
     let profileData = null;
 
     if (supabase) {
-      const { data } = await supabase
-        .from('users')
-        .select('role, branch_id')
-        .eq('id', user.id)
-        .maybeSingle();
-      profileData = data;
+      try {
+        const { data, error } = await withTimeout(
+          supabase.from('users').select('role, branch_id').eq('id', user.id).maybeSingle(),
+          7000,
+          'Profile lookup timed out'
+        );
+
+        if (error) {
+          console.warn(`Profile lookup failed: ${error.message}`);
+        }
+
+        profileData = data;
+      } catch (error) {
+        console.warn(`Profile lookup failed: ${error.message}`);
+      }
     }
 
     setProfile({
@@ -59,6 +67,7 @@ export default function App() {
   const handleSessionReady = useCallback(
     async (nextSession) => {
       setSession(nextSession);
+      setBootError('');
       await hydrateProfile(nextSession);
     },
     [hydrateProfile]
@@ -72,22 +81,34 @@ export default function App() {
 
     let isMounted = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!isMounted) {
-        return;
-      }
+    supabase.auth
+      .getSession()
+      .then(async ({ data }) => {
+        if (!isMounted) {
+          return;
+        }
 
-      setSession(data.session);
-      await hydrateProfile(data.session);
-      setIsBooting(false);
-    });
+        setSession(data.session);
+        await hydrateProfile(data.session);
+      })
+      .catch((error) => {
+        console.warn(`Session restore failed: ${error.message}`);
+        setBootError('Could not restore the saved session. Sign in again.');
+        setSession(null);
+        setProfile(null);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsBooting(false);
+        }
+      });
 
     const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       setSession(nextSession);
+      setBootError('');
       await hydrateProfile(nextSession);
       if (!nextSession) {
         setTransactions([]);
-        setActiveView('cashier');
       }
     });
 
@@ -99,6 +120,10 @@ export default function App() {
 
   useEffect(() => {
     if (!session || !profile) {
+      return undefined;
+    }
+
+    if (profile.role === 'admin') {
       return undefined;
     }
 
@@ -132,29 +157,30 @@ export default function App() {
   }
 
   if (!session) {
-    return <LoginScreen onSession={handleSessionReady} />;
+    return <LoginScreen onSession={handleSessionReady} bootError={bootError} />;
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar
-        activeView={activeView}
-        isAdmin={isAdmin}
-        onLogout={handleLogout}
-        onViewChange={setActiveView}
-        profile={profile}
-        transactions={visibleTransactions}
-      />
-
-      {activeView === 'admin' && isAdmin ? (
-        <AdminDashboard />
+    <div className="min-h-screen bg-background">
+      {isAdmin ? (
+        <AdminDashboard onLogout={handleLogout} profile={profile} />
       ) : (
         <CashierDashboard
           onRefreshTransactions={refreshTransactions}
+          onLogout={handleLogout}
           profile={profile}
-          transactions={transactions}
+          transactions={visibleTransactions}
         />
       )}
     </div>
   );
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    })
+  ]);
 }

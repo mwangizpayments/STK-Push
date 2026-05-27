@@ -31,12 +31,21 @@ export async function requireAuth(req, res, next) {
   let profile = null;
 
   if (supabase) {
-    const { data: profileData } = await supabase
-      .from('users')
-      .select('role, branch_id')
-      .eq('id', user.id)
-      .maybeSingle();
-    profile = profileData;
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('users')
+        .select('role, branch_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.warn(`Profile lookup failed: ${profileError.message}`);
+      }
+
+      profile = profileData;
+    } catch (error) {
+      console.warn(`Profile lookup failed: ${error.message}`);
+    }
   }
 
   req.user = {

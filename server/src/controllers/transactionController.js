@@ -8,9 +8,19 @@ export async function getTransactions(req, res) {
 
   const transactions = await listTransactions({
     branchId,
-    limit: Number(req.query.limit || 50)
+    dateFrom: req.query.date_from,
+    dateTo: req.query.date_to,
+    limit: Number(req.query.limit || 50),
+    page: req.query.page,
+    pageSize: req.query.page_size || req.query.pageSize,
+    search: req.query.search,
+    status: req.query.status
   });
 
-  res.json({ transactions });
-}
+  if (Array.isArray(transactions)) {
+    res.json({ transactions });
+    return;
+  }
 
+  res.json(transactions);
+}
