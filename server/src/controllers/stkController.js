@@ -1,5 +1,6 @@
 import { requestStkPush } from '../services/darajaService.js';
-import { createTransaction } from '../services/transactionRepository.js';
+import { env } from '../config/env.js';
+import { createTransaction, updateTransactionFromCallback } from '../services/transactionRepository.js';
 import { httpError } from '../utils/httpError.js';
 import { normalizeAmount, normalizeMpesaPhone, requireUuid } from '../utils/validators.js';
 
@@ -39,6 +40,12 @@ export async function createStkPush(req, res) {
     raw_response: stk
   });
 
+  scheduleMockCompletion({
+    amount,
+    checkoutRequestId: stk.CheckoutRequestID,
+    phone
+  });
+
   res.status(201).json({
     transaction,
     stk: {
@@ -49,4 +56,44 @@ export async function createStkPush(req, res) {
       customer_message: stk.CustomerMessage
     }
   });
+}
+
+function scheduleMockCompletion({ amount, checkoutRequestId, phone }) {
+  if (!env.daraja.useMock || !env.daraja.mockAutoComplete) {
+    return;
+  }
+
+  setTimeout(() => {
+    const receiptNumber = createMockReceipt();
+
+    updateTransactionFromCallback({
+      callbackPayload: {
+        Body: {
+          stkCallback: {
+            CheckoutRequestID: checkoutRequestId,
+            ResultCode: 0,
+            ResultDesc: 'Mock payment completed successfully',
+            CallbackMetadata: {
+              Item: [
+                { Name: 'Amount', Value: amount },
+                { Name: 'MpesaReceiptNumber', Value: receiptNumber },
+                { Name: 'PhoneNumber', Value: phone }
+              ]
+            }
+          }
+        }
+      },
+      checkoutRequestId,
+      failureReason: null,
+      receiptNumber,
+      resultCode: 0,
+      status: 'success'
+    }).catch((error) => {
+      console.error(`Mock callback failed: ${error.message}`);
+    });
+  }, env.daraja.mockAutoCompleteDelayMs);
+}
+
+function createMockReceipt() {
+  return `MOCK${Date.now().toString().slice(-8)}`;
 }

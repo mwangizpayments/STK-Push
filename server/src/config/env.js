@@ -23,6 +23,10 @@ export const env = {
   },
   daraja: {
     useMock: (process.env.DARAJA_USE_MOCK || 'true') !== 'false',
+    mockAutoComplete:
+      (process.env.DARAJA_MOCK_AUTO_COMPLETE ||
+        (process.env.NODE_ENV === 'production' ? 'false' : 'true')) === 'true',
+    mockAutoCompleteDelayMs: Number(process.env.DARAJA_MOCK_AUTO_COMPLETE_DELAY_MS || 2500),
     consumerKey: process.env.DARAJA_CONSUMER_KEY || '',
     consumerSecret: process.env.DARAJA_CONSUMER_SECRET || '',
     passkey: process.env.DARAJA_PASSKEY || '',
@@ -43,4 +47,3 @@ export const hasSupabaseConfig = Boolean(
 );
 
 export const hasSupabaseAuthConfig = Boolean(env.supabase.url && env.supabase.anonKey);
-
