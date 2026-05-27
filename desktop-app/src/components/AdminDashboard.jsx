@@ -267,11 +267,11 @@ export function AdminDashboard({ onLogout, profile }) {
 
   return (
     <main className="flex min-h-screen bg-background text-foreground">
-      <aside className="hidden h-screen w-72 shrink-0 border-r bg-card/70 backdrop-blur xl:flex xl:flex-col">
-        <div className="border-b px-5 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <CreditCard className="h-4 w-4" />
+      <aside className="hidden h-screen w-64 shrink-0 border-r bg-card/70 backdrop-blur xl:flex xl:flex-col">
+        <div className="border-b px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <CreditCard className="h-3.5 w-3.5" />
             </div>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">Mwangiz STK</p>
@@ -280,13 +280,13 @@ export function AdminDashboard({ onLogout, profile }) {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 space-y-1 px-2.5 py-3">
           {pages.map((page) => {
             const Icon = page.icon;
             const active = activePage === page.value;
             return (
               <button
-                className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
                   active
                     ? 'bg-secondary text-foreground'
                     : 'text-muted-foreground hover:bg-secondary/70 hover:text-foreground'
@@ -295,15 +295,15 @@ export function AdminDashboard({ onLogout, profile }) {
                 onClick={() => setActivePage(page.value)}
                 type="button"
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3.5 w-3.5" />
                 {page.label}
               </button>
             );
           })}
         </nav>
 
-        <div className="border-t p-4">
-          <Button className="w-full justify-start" variant="outline" onClick={onLogout}>
+        <div className="border-t p-3">
+          <Button className="h-9 w-full justify-start" variant="outline" onClick={onLogout}>
             <LogOut className="h-4 w-4" />
             Logout
           </Button>
@@ -311,10 +311,10 @@ export function AdminDashboard({ onLogout, profile }) {
       </aside>
 
       <section className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-5 lg:px-6">
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="mb-3 flex gap-2 xl:hidden">
+              <div className="mb-2 flex gap-2 xl:hidden">
                 {pages.map((page) => (
                   <Button
                     key={page.value}
@@ -326,15 +326,15 @@ export function AdminDashboard({ onLogout, profile }) {
                   </Button>
                 ))}
               </div>
-              <h1 className="text-2xl font-semibold tracking-normal lg:text-3xl">{pageTitle(activePage)}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Monitor payments and branches from one place.</p>
+              <h1 className="text-xl font-semibold tracking-normal lg:text-2xl">{pageTitle(activePage)}</h1>
+              <p className="mt-0.5 text-xs text-muted-foreground">Monitor payments and branches from one place.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={refreshAll} disabled={isLoading}>
+              <Button className="h-9" variant="outline" onClick={refreshAll} disabled={isLoading}>
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
                 Refresh
               </Button>
-              <Button variant="outline" onClick={onLogout}>
+              <Button className="h-9" variant="outline" onClick={onLogout}>
                 <LogOut className="h-4 w-4" />
                 Logout
               </Button>
@@ -342,13 +342,13 @@ export function AdminDashboard({ onLogout, profile }) {
           </div>
 
           {notice ? (
-            <div className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+            <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
               {notice}
             </div>
           ) : null}
 
           {error ? (
-            <div className="mb-5 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+            <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
               {error}
             </div>
           ) : null}
@@ -413,10 +413,10 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <FilterBar customRange={customRange} range={range} setCustomRange={setCustomRange} setRange={setRange} />
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard
           icon={CircleDollarSign}
           label="Total Revenue"
@@ -451,15 +451,15 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)]">
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.8fr)]">
         <Card className="transition-shadow hover:shadow-md">
           <CardHeader>
             <CardTitle>Revenue trend</CardTitle>
             <CardDescription>Gross payment value across the selected period.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer className="h-[320px] w-full" config={chartConfig}>
-              <AreaChart data={revenueData} margin={{ left: 0, right: 16, top: 12 }}>
+            <ChartContainer className="h-[240px] w-full" config={chartConfig}>
+              <AreaChart data={revenueData} margin={{ bottom: 0, left: 0, right: 10, top: 6 }}>
                 <defs>
                   <linearGradient id="revenueFill" x1="0" x2="0" y1="0" y2="1">
                     <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.28} />
@@ -467,8 +467,8 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} />
-                <XAxis dataKey="chart_label" tickLine={false} axisLine={false} tickMargin={10} />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactCurrency} width={72} />
+                <XAxis dataKey="chart_label" tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={formatCompactCurrency} width={58} />
                 <ChartTooltip
                   cursor={false}
                   content={<ChartTooltipContent formatter={(value) => formatCurrency(value)} />}
@@ -477,7 +477,7 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
                   dataKey="total_amount"
                   fill="url(#revenueFill)"
                   stroke="hsl(var(--primary))"
-                  strokeWidth={2.5}
+                  strokeWidth={2}
                   type="monotone"
                 />
               </AreaChart>
@@ -492,7 +492,7 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
           </CardHeader>
           <CardContent>
             {successFailedData.length ? (
-              <ChartContainer className="h-[320px] w-full" config={chartConfig}>
+              <ChartContainer className="h-[240px] w-full" config={chartConfig}>
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Pie
@@ -500,9 +500,9 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
                     cy="50%"
                     data={successFailedData}
                     dataKey="value"
-                    innerRadius={72}
+                    innerRadius={56}
                     nameKey="name"
-                    outerRadius={104}
+                    outerRadius={82}
                     paddingAngle={4}
                     strokeWidth={0}
                   >
@@ -519,7 +519,7 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section className="grid gap-3 xl:grid-cols-2">
         <Card className="transition-shadow hover:shadow-md">
           <CardHeader>
             <CardTitle>Branch performance</CardTitle>
@@ -527,16 +527,16 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
           </CardHeader>
           <CardContent>
             {branchData.length ? (
-              <ChartContainer className="h-[340px] w-full" config={chartConfig}>
-                <BarChart data={branchData} layout="vertical" margin={{ left: 12, right: 16 }}>
+              <ChartContainer className="h-[260px] w-full" config={chartConfig}>
+                <BarChart data={branchData} layout="vertical" margin={{ left: 4, right: 10 }}>
                   <CartesianGrid horizontal={false} />
                   <XAxis type="number" tickFormatter={formatCompactCurrency} />
-                  <YAxis dataKey="branch_name" type="category" width={130} tickLine={false} axisLine={false} />
+                  <YAxis dataKey="branch_name" type="category" width={110} tickLine={false} axisLine={false} />
                   <ChartTooltip
                     content={<ChartTooltipContent formatter={(value) => formatCurrency(value)} />}
                     cursor={false}
                   />
-                  <Bar dataKey="total_amount" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} />
+                  <Bar dataKey="total_amount" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ChartContainer>
             ) : (
@@ -551,13 +551,13 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
             <CardDescription>Transaction volume by time of day.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer className="h-[340px] w-full" config={chartConfig}>
-              <BarChart data={hourlyData} margin={{ left: 0, right: 12, top: 8 }}>
+            <ChartContainer className="h-[260px] w-full" config={chartConfig}>
+              <BarChart data={hourlyData} margin={{ left: 0, right: 8, top: 4 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="label" interval={2} tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} width={44} />
+                <YAxis tickLine={false} axisLine={false} width={36} />
                 <ChartTooltip content={<ChartTooltipContent />} cursor={false} />
-                <Bar dataKey="total_count" fill="hsl(var(--accent))" radius={[5, 5, 0, 0]} />
+                <Bar dataKey="total_count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ChartContainer>
           </CardContent>
@@ -569,16 +569,16 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
 
 function TransactionsPage({ branchMap, branches, filters, pagination, setFilter, setPagination, transactions }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <Card>
-        <CardContent className="p-4">
-          <div className="grid gap-3 lg:grid-cols-[1fr_180px_160px_160px_160px]">
-            <div className="space-y-2">
-              <Label htmlFor="search">Search</Label>
+        <CardContent className="p-3">
+          <div className="grid gap-2.5 lg:grid-cols-[1fr_170px_145px_145px_145px]">
+            <div className="space-y-1.5">
+              <Label className="text-xs" htmlFor="search">Search</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
-                  className="pl-9"
+                  className="h-9 bg-background pl-8 text-xs"
                   id="search"
                   placeholder="Phone or receipt"
                   value={filters.search}
@@ -607,37 +607,37 @@ function TransactionsPage({ branchMap, branches, filters, pagination, setFilter,
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="max-h-[calc(100vh-300px)] overflow-auto">
-          <table className="w-full min-w-[980px] border-collapse text-left text-sm">
+        <div className="max-h-[calc(100vh-230px)] overflow-auto">
+          <table className="w-full min-w-[900px] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 border-b bg-card/95 text-xs uppercase text-muted-foreground backdrop-blur">
               <tr>
-                <th className="px-4 py-3 font-medium">Transaction ID</th>
-                <th className="px-4 py-3 font-medium">Branch</th>
-                <th className="px-4 py-3 font-medium">Phone</th>
-                <th className="px-4 py-3 font-medium">Amount</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">M-Pesa receipt</th>
-                <th className="px-4 py-3 font-medium">Timestamp</th>
+                <th className="px-3 py-2 font-medium">Transaction ID</th>
+                <th className="px-3 py-2 font-medium">Branch</th>
+                <th className="px-3 py-2 font-medium">Phone</th>
+                <th className="px-3 py-2 font-medium">Amount</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">M-Pesa receipt</th>
+                <th className="px-3 py-2 font-medium">Timestamp</th>
               </tr>
             </thead>
             <tbody>
               {transactions.length ? (
                 transactions.map((transaction) => (
                   <tr className="border-b transition-colors hover:bg-secondary/40" key={transaction.id}>
-                    <td className="max-w-48 truncate px-4 py-3 font-mono text-xs">{transaction.id}</td>
-                    <td className="px-4 py-3">{branchMap.get(transaction.branch_id)?.name || transaction.branch_id}</td>
-                    <td className="px-4 py-3">{transaction.phone}</td>
-                    <td className="px-4 py-3 font-medium">{formatCurrency(transaction.amount)}</td>
-                    <td className="px-4 py-3">
+                    <td className="max-w-40 truncate px-3 py-2 font-mono">{transaction.id}</td>
+                    <td className="px-3 py-2">{branchMap.get(transaction.branch_id)?.name || transaction.branch_id}</td>
+                    <td className="px-3 py-2">{transaction.phone}</td>
+                    <td className="px-3 py-2 font-medium">{formatCurrency(transaction.amount)}</td>
+                    <td className="px-3 py-2">
                       <StatusPill status={transaction.status || 'pending'} />
                     </td>
-                    <td className="px-4 py-3">{transaction.mpesa_receipt || '-'}</td>
-                    <td className="px-4 py-3">{formatTimestamp(transaction.created_at)}</td>
+                    <td className="px-3 py-2">{transaction.mpesa_receipt || '-'}</td>
+                    <td className="px-3 py-2">{formatTimestamp(transaction.created_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td className="px-4 py-12 text-center text-muted-foreground" colSpan="7">
+                  <td className="px-3 py-8 text-center text-muted-foreground" colSpan="7">
                     No transactions found.
                   </td>
                 </tr>
@@ -647,12 +647,13 @@ function TransactionsPage({ branchMap, branches, filters, pagination, setFilter,
         </div>
       </Card>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">
           Page {pagination.page} of {pagination.total_pages} . {pagination.total} records
         </p>
         <div className="flex gap-2">
           <Button
+            className="h-9"
             variant="outline"
             disabled={pagination.page <= 1}
             onClick={() => setPagination((current) => ({ ...current, page: current.page - 1 }))}
@@ -660,6 +661,7 @@ function TransactionsPage({ branchMap, branches, filters, pagination, setFilter,
             Previous
           </Button>
           <Button
+            className="h-9"
             variant="outline"
             disabled={pagination.page >= pagination.total_pages}
             onClick={() => setPagination((current) => ({ ...current, page: current.page + 1 }))}
@@ -690,15 +692,15 @@ function BranchSetupPage({
   );
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[440px_minmax(0,1fr)]">
-      <div className="space-y-5">
+    <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <CardTitle>Create branch</CardTitle>
             <CardDescription>Creates one cashier login and links it to the new branch.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="space-y-4" onSubmit={handleCreateBranch}>
+            <form className="space-y-3" onSubmit={handleCreateBranch}>
               <TextField
                 label="Branch name"
                 value={branchForm.name}
@@ -720,7 +722,7 @@ function BranchSetupPage({
                 onChange={(value) => setBranchForm((current) => ({ ...current, password: value }))}
                 required
               />
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <TextField
                   label="Till number"
                   value={branchForm.till_number}
@@ -740,7 +742,7 @@ function BranchSetupPage({
                 value={branchForm.passkey}
                 onChange={(value) => setBranchForm((current) => ({ ...current, passkey: value }))}
               />
-              <Button className="w-full" type="submit" disabled={isSavingBranch}>
+              <Button className="h-9 w-full" type="submit" disabled={isSavingBranch}>
                 {isSavingBranch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Create branch
               </Button>
@@ -755,14 +757,14 @@ function BranchSetupPage({
               <CardDescription>Update branch payment identifiers.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-4" onSubmit={handleUpdateBranch}>
+              <form className="space-y-3" onSubmit={handleUpdateBranch}>
                 <TextField
                   label="Branch name"
                   value={editingBranch.name || ''}
                   onChange={(value) => setEditingBranch((current) => ({ ...current, name: value }))}
                   required
                 />
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <TextField
                     label="Till number"
                     value={editingBranch.till_number || ''}
@@ -781,10 +783,10 @@ function BranchSetupPage({
                   onChange={(value) => setEditingBranch((current) => ({ ...current, passkey: value }))}
                 />
                 <div className="flex gap-2">
-                  <Button type="submit" disabled={isSavingBranch}>
+                  <Button className="h-9" type="submit" disabled={isSavingBranch}>
                     Save changes
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setEditingBranch(null)}>
+                  <Button className="h-9" type="button" variant="outline" onClick={() => setEditingBranch(null)}>
                     Cancel
                   </Button>
                 </div>
@@ -800,34 +802,34 @@ function BranchSetupPage({
           <CardDescription>Active branches and linked cashier accounts.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {branches.length ? (
               branches.map((branch) => {
                 const cashier = cashierByBranch.get(branch.id);
                 return (
                   <div
-                    className="rounded-md border p-4 transition-colors hover:bg-secondary/40"
+                    className="rounded-md border p-3 transition-colors hover:bg-secondary/40"
                     key={branch.id}
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate font-medium">{branch.name}</p>
+                          <p className="truncate text-sm font-medium">{branch.name}</p>
                           <Badge variant="outline">Active</Badge>
                         </div>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           Till {branch.till_number || '-'} . Shortcode {branch.shortcode || '-'}
                         </p>
-                        <p className="mt-1 truncate text-sm text-muted-foreground">
+                        <p className="mt-1 truncate text-xs text-muted-foreground">
                           Cashier: {cashier?.email || 'Not linked'}
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <Button size="icon" variant="outline" onClick={() => setEditingBranch(branch)}>
-                          <Pencil className="h-4 w-4" />
+                        <Button className="h-8 w-8" size="icon" variant="outline" onClick={() => setEditingBranch(branch)}>
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="icon" variant="destructive" onClick={() => handleDeleteBranch(branch)}>
-                          <Trash2 className="h-4 w-4" />
+                        <Button className="h-8 w-8" size="icon" variant="destructive" onClick={() => handleDeleteBranch(branch)}>
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -847,10 +849,11 @@ function BranchSetupPage({
 function FilterBar({ customRange, range, setCustomRange, setRange }) {
   return (
     <Card>
-      <CardContent className="flex flex-col gap-3 p-3 lg:flex-row lg:items-center lg:justify-between">
+      <CardContent className="flex flex-col gap-2 p-2.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap gap-2">
           {timeRanges.map((item) => (
             <Button
+              className="h-8 px-2.5 text-xs"
               key={item.value}
               size="sm"
               variant={range === item.value ? 'default' : 'outline'}
@@ -863,13 +866,13 @@ function FilterBar({ customRange, range, setCustomRange, setRange }) {
         {range === 'custom' ? (
           <div className="flex flex-wrap gap-2">
             <Input
-              className="w-40"
+              className="h-8 w-36 bg-background text-xs"
               type="date"
               value={customRange.date_from}
               onChange={(event) => setCustomRange((current) => ({ ...current, date_from: event.target.value }))}
             />
             <Input
-              className="w-40"
+              className="h-8 w-36 bg-background text-xs"
               type="date"
               value={customRange.date_to}
               onChange={(event) => setCustomRange((current) => ({ ...current, date_to: event.target.value }))}
@@ -887,17 +890,17 @@ function KpiCard({ icon: Icon, label, tone = 'default', trend, value }) {
 
   return (
     <Card className="transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
+      <CardContent className="p-3.5">
+        <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="mt-3 text-2xl font-semibold tracking-normal">{value}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="mt-2 text-xl font-semibold tracking-normal">{value}</p>
           </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-md border bg-secondary/70">
-            <Icon className="h-4 w-4 text-muted-foreground" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-md border bg-secondary/70">
+            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
         </div>
-        <div className={`mt-4 flex items-center gap-1 text-xs ${trendClass}`}>
+        <div className={`mt-3 flex items-center gap-1 text-xs ${trendClass}`}>
           <TrendIcon className="h-3.5 w-3.5" />
           {trend}
         </div>
@@ -908,10 +911,10 @@ function KpiCard({ icon: Icon, label, tone = 'default', trend, value }) {
 
 function SelectField({ children, label, onChange, value }) {
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
       <select
-        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-9 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -923,11 +926,11 @@ function SelectField({ children, label, onChange, value }) {
 
 function DateField({ label, onChange, value }) {
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
       <div className="relative">
-        <CalendarDays className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input className="pl-9" type="date" value={value} onChange={(event) => onChange(event.target.value)} />
+        <CalendarDays className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+        <Input className="h-9 bg-background pl-8 text-xs" type="date" value={value} onChange={(event) => onChange(event.target.value)} />
       </div>
     </div>
   );
@@ -937,16 +940,16 @@ function TextField({ label, onChange, value, ...props }) {
   const id = label.toLowerCase().replaceAll(' ', '-');
 
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input id={id} value={value} onChange={(event) => onChange(event.target.value)} {...props} />
+    <div className="space-y-1.5">
+      <Label className="text-xs" htmlFor={id}>{label}</Label>
+      <Input className="h-9 bg-background text-xs" id={id} value={value} onChange={(event) => onChange(event.target.value)} {...props} />
     </div>
   );
 }
 
 function EmptyState({ label }) {
   return (
-    <div className="flex min-h-40 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+    <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
       {label}
     </div>
   );
