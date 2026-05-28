@@ -19,10 +19,12 @@ import { api } from '@/lib/apiClient';
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient';
 
 const activeTransactionStatuses = ['created', 'pending', 'pending_pin', 'processing'];
+const PUBLIC_BOOT_STATUS = 'Starting app...';
+const PUBLIC_READY_STATUS = 'App ready.';
 
 export default function App() {
   const [isBooting, setIsBooting] = useState(true);
-  const [bootStatus, setBootStatus] = useState('Initializing secure terminal...');
+  const [bootStatus, setBootStatus] = useState(PUBLIC_BOOT_STATUS);
   const [bootError, setBootError] = useState('');
   const [cashierMode, setCashierMode] = useState(CASHIER_MODES.SIMPLE);
   const [showCashierModeModal, setShowCashierModeModal] = useState(false);
@@ -108,7 +110,12 @@ export default function App() {
 
   const runStartupChecks = useCallback(
     async ({ activeProfile, activeSession } = {}) => {
-      setStartupMessage('Connecting services...');
+      const showDetailedStatus = Boolean(activeSession && activeProfile);
+
+      if (showDetailedStatus) {
+        setStartupMessage('Connecting services...');
+      }
+
       const backendOnline = await checkBackendConnectivity();
       setIsOffline(!backendOnline);
 
@@ -117,10 +124,16 @@ export default function App() {
       }
 
       if (activeProfile.role === 'cashier') {
-        setStartupMessage('Loading cashier dashboard...');
+        if (showDetailedStatus) {
+          setStartupMessage('Loading cashier dashboard...');
+        }
+
         cacheBranchConfig(activeProfile);
 
-        setStartupMessage('Syncing pending transactions...');
+        if (showDetailedStatus) {
+          setStartupMessage('Syncing pending transactions...');
+        }
+
         try {
           const params = { limit: 100 };
           if (activeProfile.branch_id) {
@@ -185,15 +198,16 @@ export default function App() {
   useEffect(() => {
     if (!hasSupabaseConfig || !supabase) {
       runStartupChecks().finally(() => {
-        notifyBootReady();
+        notifyBootReady(PUBLIC_READY_STATUS);
       });
       setIsBooting(false);
       return undefined;
     }
 
     let isMounted = true;
+    let restoredSession = null;
 
-    setStartupMessage('Restoring session...');
+    setStartupMessage('Loading assets...');
     supabase.auth
       .getSession()
       .then(async ({ data }) => {
@@ -201,10 +215,16 @@ export default function App() {
           return;
         }
 
-        setSession(data.session);
-        const nextProfile = await hydrateProfile(data.session);
+        restoredSession = data.session;
+        setSession(restoredSession);
+
+        if (restoredSession) {
+          setStartupMessage('Restoring session...');
+        }
+
+        const nextProfile = await hydrateProfile(restoredSession);
         applyCashierModeForProfile(nextProfile);
-        await runStartupChecks({ activeProfile: nextProfile, activeSession: data.session });
+        await runStartupChecks({ activeProfile: nextProfile, activeSession: restoredSession });
       })
       .catch((error) => {
         console.warn(`Session restore failed: ${error.message}`);
@@ -215,7 +235,7 @@ export default function App() {
       })
       .finally(() => {
         if (isMounted) {
-          notifyBootReady();
+          notifyBootReady(restoredSession ? 'Terminal ready.' : PUBLIC_READY_STATUS);
           setIsBooting(false);
         }
       });

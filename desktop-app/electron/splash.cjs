@@ -4,11 +4,9 @@ const { pathToFileURL } = require('node:url');
 const { BrowserWindow } = require('electron');
 
 const SPLASH_MESSAGES = [
-  'Initializing secure terminal...',
-  'Connecting services...',
-  'Restoring session...',
-  'Loading cashier dashboard...',
-  'Syncing pending transactions...'
+  'Starting app...',
+  'Loading assets...',
+  'Preparing terminal...'
 ];
 
 function getBrandingAssetPath(fileName) {

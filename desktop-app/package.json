@@ -102,7 +102,7 @@
         }
       ],
       "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
-      "icon": "public/branding/icon-placeholder.png",
+      "icon": "build-resources/icon.ico",
       "requestedExecutionLevel": "asInvoker",
       "signAndEditExecutable": true,
       "forceCodeSigning": false,
@@ -132,11 +132,11 @@
       "uninstallDisplayName": "M-PESA STK Terminal",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
-      "differentialPackage": true,
-      "useZip": true,
-      "installerIcon": "public/branding/icon-placeholder.png",
-      "uninstallerIcon": "public/branding/icon-placeholder.png",
-      "installerHeaderIcon": "public/branding/icon-placeholder.png"
+      "differentialPackage": false,
+      "useZip": false,
+      "installerIcon": "build-resources/icon.ico",
+      "uninstallerIcon": "build-resources/icon.ico",
+      "installerHeaderIcon": "build-resources/icon.ico"
     }
   }
 }
