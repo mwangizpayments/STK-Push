@@ -16,16 +16,16 @@
     "dev": "concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on tcp:5173 && node electron/launch.cjs --dev\"",
     "dev:vite": "vite --host 127.0.0.1 --port 5173",
     "start": "node electron/launch.cjs",
-    "build:renderer": "vite build",
+    "build:renderer": "node electron/run-vite.cjs build",
     "prebuild": "npm run build:renderer",
-    "build": "cross-env NODE_ENV=production ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder",
+    "build": "node electron/run-builder.cjs",
     "predist:win": "npm run build:renderer",
-    "dist:win": "cross-env NODE_ENV=production ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder --win nsis",
+    "dist:win": "node electron/run-builder.cjs --win nsis",
     "predist:win:portable": "npm run build:renderer",
-    "dist:win:portable": "cross-env NODE_ENV=production ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder --win nsis portable",
+    "dist:win:portable": "node electron/run-builder.cjs --win nsis portable",
     "prerelease": "npm run build:renderer",
-    "release": "cross-env NODE_ENV=production ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES=true electron-builder --win nsis --publish always",
-    "preview": "vite preview --host 127.0.0.1 --port 4173"
+    "release": "node electron/run-builder.cjs --win nsis --publish always",
+    "preview": "node electron/run-vite.cjs preview --host 127.0.0.1 --port 4173"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.1",
