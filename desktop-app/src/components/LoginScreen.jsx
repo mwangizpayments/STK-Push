@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { AlertCircle, Eye, EyeOff, Loader2, Mail, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,17 +9,31 @@ import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient';
 const LAST_EMAIL_KEY = 'mpesa:last-email';
 
 export function LoginScreen({ bootError = '', onSession }) {
-  const [email, setEmail] = useState(() => localStorage.getItem(LAST_EMAIL_KEY) || '');
+  const [email, setEmail] = useState(() => {
+    try {
+      return localStorage.getItem(LAST_EMAIL_KEY) || '';
+    } catch (_error) {
+      return '';
+    }
+  });
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    if (email.trim()) {
-      localStorage.setItem(LAST_EMAIL_KEY, email.trim());
+  const saveLastEmail = useCallback((value) => {
+    const nextEmail = String(value || '').trim();
+
+    if (!nextEmail) {
+      return;
     }
-  }, [email]);
+
+    try {
+      localStorage.setItem(LAST_EMAIL_KEY, nextEmail);
+    } catch (_error) {
+      // Login should stay responsive even when local storage is unavailable.
+    }
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -31,6 +45,7 @@ export function LoginScreen({ bootError = '', onSession }) {
     }
 
     setIsSubmitting(true);
+    saveLastEmail(email);
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password
@@ -47,7 +62,7 @@ export function LoginScreen({ bootError = '', onSession }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center overflow-hidden bg-[linear-gradient(135deg,hsl(var(--background)),hsl(var(--secondary)/0.48))] p-6 text-foreground">
-      <section className="w-full max-w-[420px] rounded-lg border bg-card/95 p-7 shadow-xl shadow-black/5 backdrop-blur transition-all duration-200">
+      <section className="w-full max-w-[420px] rounded-lg border bg-card p-7 shadow-lg shadow-black/5">
         <div className="mb-7 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md bg-primary text-primary-foreground shadow-sm">
             <img alt="" className="h-full w-full object-cover" src={iconPath} />
@@ -62,7 +77,7 @@ export function LoginScreen({ bootError = '', onSession }) {
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <div className="relative">
-              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Mail className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-9"
                 id="email"
@@ -71,6 +86,7 @@ export function LoginScreen({ bootError = '', onSession }) {
                 autoFocus
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                onBlur={(event) => saveLastEmail(event.target.value)}
                 required
               />
             </div>
@@ -79,7 +95,7 @@ export function LoginScreen({ bootError = '', onSession }) {
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <div className="relative">
-              <ShieldCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <ShieldCheck className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 className="pl-9 pr-10"
                 id="password"

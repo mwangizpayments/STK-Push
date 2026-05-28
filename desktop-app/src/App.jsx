@@ -36,7 +36,6 @@ export default function App() {
   const [updateState, setUpdateState] = useState({ status: 'idle' });
 
   const profileRef = useRef(null);
-  const promptCashierModeOnNextSessionRef = useRef(false);
   const isAdmin = profile?.role === 'admin';
 
   const setStartupMessage = useCallback((message) => {
@@ -96,16 +95,17 @@ export default function App() {
     return nextProfile;
   }, []);
 
-  const applyCashierModeForProfile = useCallback((nextProfile, { forcePrompt = false } = {}) => {
+  const applyCashierModeForProfile = useCallback((nextProfile) => {
     if (nextProfile?.role !== 'cashier') {
       setShowCashierModeModal(false);
       return;
     }
 
+    const hasStoredMode = hasStoredCashierMode(nextProfile.id);
     const storedMode = loadCashierMode(nextProfile.id);
     const mode = storedMode || CASHIER_MODES.SIMPLE;
     setCashierMode(mode);
-    setShowCashierModeModal(forcePrompt || !hasStoredCashierMode(nextProfile.id));
+    setShowCashierModeModal(!hasStoredMode);
   }, []);
 
   const runStartupChecks = useCallback(
@@ -141,7 +141,7 @@ export default function App() {
           }
 
           const { data } = await api.get('/api/transactions', { params });
-          const nextTransactions = data.transactions || [];
+          const nextTransactions = sortTransactionsByCreatedAt(data.transactions || []);
           setTransactions(nextTransactions);
           setPendingSyncCount(countPendingTransactions(nextTransactions));
         } catch (error) {
@@ -153,30 +153,49 @@ export default function App() {
     [setStartupMessage]
   );
 
-  const refreshTransactions = useCallback(async () => {
-    if (!session || !profile) {
+  const refreshTransactions = useCallback(async ({ activeProfile = profile, activeSession = session } = {}) => {
+    if (!activeSession || !activeProfile) {
       return;
     }
 
     const params = { limit: 100 };
-    if (profile.role !== 'admin' && profile.branch_id) {
-      params.branch_id = profile.branch_id;
+    if (activeProfile.role !== 'admin' && activeProfile.branch_id) {
+      params.branch_id = activeProfile.branch_id;
     }
 
     const { data } = await api.get('/api/transactions', { params });
-    const nextTransactions = data.transactions || [];
+    const nextTransactions = sortTransactionsByCreatedAt(data.transactions || []);
     setTransactions(nextTransactions);
     setPendingSyncCount(countPendingTransactions(nextTransactions));
   }, [profile, session]);
 
+  const refreshCashierState = useCallback(async () => {
+    if (!session || !profile) {
+      return;
+    }
+
+    let activeSession = session;
+
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      activeSession = data.session || session;
+      setSession(activeSession);
+    }
+
+    const nextProfile = await hydrateProfile(activeSession);
+    applyCashierModeForProfile(nextProfile);
+    await refreshTransactions({
+      activeProfile: nextProfile || profile,
+      activeSession
+    });
+  }, [applyCashierModeForProfile, hydrateProfile, profile, refreshTransactions, session]);
+
   const handleSessionReady = useCallback(
     async (nextSession) => {
-      promptCashierModeOnNextSessionRef.current = true;
       setSession(nextSession);
       setBootError('');
       const nextProfile = await hydrateProfile(nextSession);
-      applyCashierModeForProfile(nextProfile, { forcePrompt: true });
-      promptCashierModeOnNextSessionRef.current = false;
+      applyCashierModeForProfile(nextProfile);
       await runStartupChecks({ activeProfile: nextProfile, activeSession: nextSession });
     },
     [applyCashierModeForProfile, hydrateProfile, runStartupChecks]
@@ -240,14 +259,11 @@ export default function App() {
         }
       });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       setSession(nextSession);
       setBootError('');
       const nextProfile = await hydrateProfile(nextSession);
-      applyCashierModeForProfile(nextProfile, {
-        forcePrompt: event === 'SIGNED_IN' || promptCashierModeOnNextSessionRef.current
-      });
-      promptCashierModeOnNextSessionRef.current = false;
+      applyCashierModeForProfile(nextProfile);
       if (!nextSession) {
         setTransactions([]);
         setPendingSyncCount(0);
@@ -363,15 +379,17 @@ export default function App() {
       <OfflineBadge isOffline={isOffline} />
       <PendingStateIndicator count={pendingSyncCount} />
       {isAdmin ? (
-        <AdminDashboard onLogout={handleLogout} profile={profile} />
+        <AdminDashboard onLogout={handleLogout} profile={profile} updateState={updateState} />
       ) : (
         <CashierDashboard
           cashierMode={cashierMode}
           onCashierModeChange={handleCashierModeChange}
+          onRefreshCashierState={refreshCashierState}
           onRefreshTransactions={refreshTransactions}
           onLogout={handleLogout}
           profile={profile}
           transactions={transactions}
+          updateState={updateState}
         />
       )}
       {!isAdmin && showCashierModeModal ? (
@@ -389,16 +407,16 @@ function UpdateToast({ updateState }) {
 
   return (
     <div className="fixed bottom-4 left-4 z-[90] w-[min(calc(100vw-2rem),360px)] rounded-lg border bg-card p-4 text-card-foreground shadow-xl">
-      <p className="text-sm font-semibold">Update available - restart to install</p>
+      <p className="text-sm font-semibold">Update available</p>
       {updateState.updateVersion ? (
         <p className="mt-1 text-xs text-muted-foreground">Version {updateState.updateVersion} has been downloaded.</p>
       ) : null}
       <Button
-        className="mt-3 h-9"
+        className="mt-3 h-9 bg-emerald-600 text-white hover:bg-emerald-700"
         type="button"
         onClick={() => window.mpesaDesktop?.restartAndInstallUpdate?.().catch(() => {})}
       >
-        Restart & Update
+        Update now
       </Button>
     </div>
   );
@@ -454,4 +472,15 @@ function cacheBranchConfig(profile) {
 
 function countPendingTransactions(items = []) {
   return items.filter((item) => activeTransactionStatuses.includes(item.status)).length;
+}
+
+function sortTransactionsByCreatedAt(items = []) {
+  return [...items].sort((a, b) => {
+    const createdDiff = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    if (createdDiff !== 0) {
+      return createdDiff;
+    }
+
+    return String(b.id || '').localeCompare(String(a.id || ''));
+  });
 }

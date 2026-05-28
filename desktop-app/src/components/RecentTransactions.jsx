@@ -1,4 +1,5 @@
 import { StatusPill } from '@/components/StatusPill';
+import { maskPhoneNumber } from '@/lib/phone';
 
 export function RecentTransactions({ transactions = [] }) {
   if (!transactions.length) {
@@ -14,7 +15,7 @@ export function RecentTransactions({ transactions = [] }) {
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{transaction.phone}</p>
+              <p className="truncate text-sm font-medium">{maskPhoneNumber(transaction.phone)}</p>
               <p className="text-xs text-muted-foreground">
                 KES {Number(transaction.amount || 0).toLocaleString()}
               </p>

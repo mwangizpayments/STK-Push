@@ -11,6 +11,7 @@ import {
   Menu,
   Phone,
   ReceiptText,
+  RefreshCcw,
   Send,
   Settings,
   Smartphone,
@@ -25,6 +26,7 @@ import { StatusPill } from '@/components/StatusPill';
 import { CASHIER_MODES } from '@/config/cashierMode';
 import { DEFAULT_BRANCH_ID } from '@/config/app';
 import { api } from '@/lib/apiClient';
+import { maskPhoneNumber } from '@/lib/phone';
 
 const activeStatuses = ['created', 'pending', 'pending_pin', 'processing'];
 const failedStatuses = ['failed', 'timeout', 'cancelled'];
@@ -96,9 +98,11 @@ export function CashierDashboard({
   cashierMode = CASHIER_MODES.SIMPLE,
   onCashierModeChange,
   onLogout,
+  onRefreshCashierState,
   onRefreshTransactions,
   profile,
-  transactions
+  transactions,
+  updateState
 }) {
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
@@ -110,11 +114,13 @@ export function CashierDashboard({
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [version, setVersion] = useState('1.0.0');
 
   const phoneRef = useRef(null);
   const amountRef = useRef(null);
+  const menuRef = useRef(null);
   const paymentRequestKeyRef = useRef('');
 
   const branchId = profile?.branch_id || DEFAULT_BRANCH_ID;
@@ -152,6 +158,21 @@ export function CashierDashboard({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, [isMenuOpen]);
 
   useEffect(() => {
     if (!currentTransaction) {
@@ -259,6 +280,26 @@ export function CashierDashboard({
     }
   }
 
+  async function handleManualRefresh() {
+    if (isRefreshing) {
+      return;
+    }
+
+    setIsRefreshing(true);
+
+    try {
+      if (onRefreshCashierState) {
+        await onRefreshCashierState();
+      } else {
+        await onRefreshTransactions?.();
+      }
+    } catch (_error) {
+      setMessage('Could not refresh. Check the connection and try again.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
   function handleRetryTransaction(transaction) {
     paymentRequestKeyRef.current = '';
     setPhone(formatKenyanPhoneInput(transaction.phone));
@@ -269,11 +310,11 @@ export function CashierDashboard({
   }
 
   return (
-    <main className="relative min-h-screen overflow-y-auto bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--secondary)/0.34))] px-5 py-5 text-foreground lg:h-screen lg:overflow-hidden">
-      <div className="absolute left-5 top-5 z-20">
+    <main className="relative min-h-screen overflow-y-auto bg-[linear-gradient(180deg,hsl(var(--background)),hsl(var(--secondary)/0.46))] px-5 py-5 text-foreground lg:h-screen lg:overflow-hidden">
+      <div ref={menuRef} className="absolute left-5 top-5 z-20">
         <Button
           aria-label="Menu"
-          className="h-11 w-11 rounded-lg transition-transform active:scale-95"
+          className="h-12 w-12 rounded-lg border-2 bg-card shadow-sm transition-all active:scale-95"
           size="icon"
           variant="outline"
           onClick={() => setIsMenuOpen((current) => !current)}
@@ -281,8 +322,14 @@ export function CashierDashboard({
           {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
 
-        {isMenuOpen ? (
-          <div className="mt-2 w-72 rounded-lg border bg-card p-3 shadow-xl shadow-black/10">
+        <div
+          aria-hidden={!isMenuOpen}
+          className={`mt-2 w-72 origin-top-left rounded-lg border bg-card p-3 shadow-xl shadow-black/10 transition-all duration-150 ${
+            isMenuOpen
+              ? 'pointer-events-auto translate-y-0 scale-100 opacity-100'
+              : 'pointer-events-none -translate-y-1 scale-95 opacity-0'
+          }`}
+        >
             <p className="truncate px-2 py-2 text-sm font-medium">{profile?.email}</p>
             <p className="truncate px-2 pb-2 text-xs text-muted-foreground">
               Branch {branchId || 'not assigned'}
@@ -313,8 +360,7 @@ export function CashierDashboard({
               <LogOut className="h-4 w-4" />
               Logout
             </Button>
-          </div>
-        ) : null}
+        </div>
       </div>
 
       <section
@@ -326,28 +372,41 @@ export function CashierDashboard({
       >
         <div className="py-1 pr-1 lg:flex lg:min-h-0 lg:items-center lg:overflow-y-auto">
           <form
-            className={`w-full rounded-xl border bg-card p-6 shadow-xl shadow-black/5 transition-all duration-200 sm:p-8 ${
+            className={`w-full rounded-lg border-2 bg-card p-6 shadow-[0_20px_60px_hsl(224_18%_16%/0.08)] transition-all duration-200 sm:p-8 ${
               displayStatus === 'success' ? 'border-emerald-300 payment-success-glow dark:border-emerald-900' : ''
             }`}
             onSubmit={handleSubmit}
           >
             <div className="mb-6 flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Payment terminal</p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-normal">Collect M-Pesa payment</h1>
+                <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Payment terminal</p>
+                <h1 className="mt-1 text-3xl font-bold tracking-normal">Collect M-Pesa payment</h1>
               </div>
-              <StatusPill status={displayStatus} />
+              <div className="flex items-center gap-2">
+                <Button
+                  aria-label="Refresh cashier data"
+                  className="h-11 w-11 rounded-lg border-2"
+                  disabled={isRefreshing}
+                  size="icon"
+                  type="button"
+                  variant="outline"
+                  onClick={handleManualRefresh}
+                >
+                  <RefreshCcw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </Button>
+                <StatusPill status={displayStatus} />
+              </div>
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="phone">Customer phone</Label>
                 <div className="relative">
-                  <Phone className="absolute left-4 top-4 h-5 w-5 text-muted-foreground" />
+                  <Phone className="absolute left-4 top-5 h-5 w-5 text-muted-foreground" />
                   <Input
                     ref={phoneRef}
                     id="phone"
-                    className="h-14 rounded-lg pl-12 text-xl tracking-normal"
+                    className="h-16 rounded-lg border-2 pl-12 text-xl font-medium tracking-normal shadow-inner shadow-black/[0.02]"
                     inputMode="tel"
                     placeholder="0712 345 678"
                     value={phone}
@@ -358,19 +417,19 @@ export function CashierDashboard({
                 </div>
                 {phone && !normalizedPhone ? (
                   <p className="text-xs text-red-600 dark:text-red-400">
-                    Use a Safaricom 07XX or 01XX number assigned to STK Push.
+                    Input a Safaricom number.
                   </p>
                 ) : null}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount</Label>
-                <div className="rounded-xl border bg-background px-4 py-4">
+                <div className="rounded-lg border-2 bg-background px-4 py-5 shadow-inner shadow-black/[0.03]">
                   <div className="mb-1 text-center text-xs font-medium text-muted-foreground">KES</div>
                   <Input
                     ref={amountRef}
                     id="amount"
-                    className="h-20 border-0 bg-transparent text-center text-5xl font-semibold tracking-normal shadow-none focus-visible:ring-0"
+                    className="h-24 border-0 bg-transparent text-center text-6xl font-bold tracking-normal shadow-none focus-visible:ring-0"
                     inputMode="numeric"
                     min="1"
                     step="1"
@@ -384,7 +443,7 @@ export function CashierDashboard({
             </div>
 
             <Button
-              className="mt-6 h-16 w-full rounded-xl text-lg font-semibold tracking-wide shadow-lg shadow-primary/20 transition-all duration-200 active:scale-[0.99]"
+              className="mt-7 h-16 w-full rounded-lg text-lg font-bold tracking-wide shadow-lg shadow-primary/20 transition-all duration-200 active:scale-[0.99]"
               type="submit"
               disabled={isSubmitting || !canPay}
             >
@@ -402,26 +461,39 @@ export function CashierDashboard({
         </div>
 
         {!isSimpleMode ? (
-          <section className="flex min-h-[360px] flex-col rounded-xl border bg-card p-4 shadow-sm lg:min-h-0">
+          <section className="flex min-h-[360px] flex-col rounded-lg border-2 bg-card p-4 shadow-[0_14px_34px_hsl(224_18%_16%/0.06)] lg:min-h-0">
             <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold">Recent transactions</h2>
                 <p className="text-xs text-muted-foreground">Tap a row for receipt details.</p>
               </div>
-              <ReceiptText className="h-4 w-4 text-muted-foreground" />
+              <div className="flex items-center gap-2">
+                <Button
+                  aria-label="Refresh transactions"
+                  className="h-9 w-9 rounded-lg"
+                  disabled={isRefreshing}
+                  size="icon"
+                  type="button"
+                  variant="outline"
+                  onClick={handleManualRefresh}
+                >
+                  <RefreshCcw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </Button>
+                <ReceiptText className="h-4 w-4 text-muted-foreground" />
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {transactions.length ? (
                 visibleTransactions.map((transaction) => (
                   <button
-                    className="grid w-full grid-cols-[1fr_auto] gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="grid w-full grid-cols-[1fr_auto] gap-3 rounded-lg border px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:bg-secondary/50 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     key={transaction.id}
                     type="button"
                     onClick={() => setSelectedTransactionId(transaction.id)}
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{formatPhoneForReceipt(transaction.phone)}</p>
+                      <p className="truncate text-sm font-semibold">{maskPhoneNumber(transaction.phone)}</p>
                       <p className="text-xs text-muted-foreground">{formatTimestamp(transaction.created_at)}</p>
                     </div>
                     <div className="text-right">
@@ -471,7 +543,7 @@ export function CashierDashboard({
         />
       ) : null}
 
-      {isAboutOpen ? <AboutModal onClose={() => setIsAboutOpen(false)} /> : null}
+      {isAboutOpen ? <AboutModal onClose={() => setIsAboutOpen(false)} updateState={updateState} /> : null}
 
       {!isSimpleMode ? <div className="fixed bottom-3 right-4 text-xs text-muted-foreground">v{version}</div> : null}
     </main>
@@ -573,7 +645,7 @@ function TransactionDetailsModal({ branchId, onClose, transaction }) {
         </div>
 
         <div className="grid gap-3 text-sm">
-          <ReceiptRow label="Phone" value={formatPhoneForReceipt(transaction.phone)} />
+          <ReceiptRow label="Phone" value={maskPhoneNumber(transaction.phone)} />
           <ReceiptRow label="Amount" value={formatCurrency(transaction.amount)} />
           <ReceiptRow label="Receipt number" value={transaction.mpesa_receipt || '-'} />
           <ReceiptRow label="Branch" value={branchId || transaction.branch_id || '-'} />
@@ -651,14 +723,6 @@ function ensurePaymentRequestKey(ref) {
   }
 
   return ref.current;
-}
-
-function formatPhoneForReceipt(value) {
-  const digits = String(value || '').replace(/\D/g, '');
-  if (/^254(7|1)\d{8}$/.test(digits)) {
-    return `+254 ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
-  }
-  return value || '-';
 }
 
 function toFriendlyPaymentError(error) {

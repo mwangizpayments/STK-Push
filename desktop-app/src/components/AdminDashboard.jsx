@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format, isValid, parseISO } from 'date-fns';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
-  Line,
-  LineChart,
+  Legend,
   Pie,
   PieChart,
   XAxis,
@@ -68,6 +69,20 @@ const timeRanges = [
   { label: 'Custom', value: 'custom' }
 ];
 
+const defaultChartRanges = {
+  branch: 'last_30_days',
+  hourly: 'today',
+  outcomes: 'last_7_days',
+  revenue: 'last_30_days'
+};
+
+const defaultChartCustomRanges = {
+  branch: { date_from: '', date_to: '' },
+  hourly: { date_from: '', date_to: '' },
+  outcomes: { date_from: '', date_to: '' },
+  revenue: { date_from: '', date_to: '' }
+};
+
 const pages = [
   { icon: LayoutDashboard, label: 'Dashboard', value: 'dashboard' },
   { icon: ReceiptText, label: 'Transactions', value: 'transactions' },
@@ -95,10 +110,19 @@ const branchColorOptions = [
   '#4F46E5'
 ];
 
-export function AdminDashboard({ onLogout, profile }) {
+export function AdminDashboard({ onLogout, profile, updateState }) {
   const [activePage, setActivePage] = useState('dashboard');
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [dashboard, setDashboard] = useState(emptyDashboard);
+  const [chartDashboards, setChartDashboards] = useState({
+    branch: emptyDashboard,
+    hourly: emptyDashboard,
+    outcomes: emptyDashboard,
+    revenue: emptyDashboard
+  });
+  const [chartRanges, setChartRanges] = useState(defaultChartRanges);
+  const [chartCustomRanges, setChartCustomRanges] = useState(defaultChartCustomRanges);
+  const [chartLoading, setChartLoading] = useState({});
   const [cashiers, setCashiers] = useState([]);
   const [range, setRange] = useState('last_7_days');
   const [customRange, setCustomRange] = useState({ date_from: '', date_to: '' });
@@ -128,22 +152,12 @@ export function AdminDashboard({ onLogout, profile }) {
 
   const branches = dashboard.branches || [];
   const branchMap = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
-  const activeBranchCount = useMemo(
-    () => branches.filter((branch) => branch.active !== false).length,
-    [branches]
+  const activeBranchCountForRange = useMemo(
+    () => (dashboard.branch_performance || []).filter((branch) => Number(branch.total_count || 0) > 0).length,
+    [dashboard.branch_performance]
   );
 
-  const dashboardParams = useMemo(() => {
-    if (range === 'custom') {
-      return {
-        date_from: customRange.date_from || undefined,
-        date_to: customRange.date_to || undefined,
-        range
-      };
-    }
-
-    return { range };
-  }, [customRange, range]);
+  const dashboardParams = useMemo(() => buildDashboardParams(range, customRange), [customRange, range]);
 
   const loadDashboard = useCallback(async () => {
     setIsLoading(true);
@@ -165,6 +179,22 @@ export function AdminDashboard({ onLogout, profile }) {
       setCashiers(data.cashiers || []);
     } catch (requestError) {
       setError(requestError.response?.data?.message || requestError.message);
+    }
+  }, []);
+
+  const loadChartDashboard = useCallback(async (chartKey, params) => {
+    setChartLoading((current) => ({ ...current, [chartKey]: true }));
+
+    try {
+      const { data } = await api.get('/api/dashboard', { params });
+      setChartDashboards((current) => ({
+        ...current,
+        [chartKey]: { ...emptyDashboard, ...data }
+      }));
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || requestError.message);
+    } finally {
+      setChartLoading((current) => ({ ...current, [chartKey]: false }));
     }
   }, []);
 
@@ -198,13 +228,35 @@ export function AdminDashboard({ onLogout, profile }) {
   }, [loadCashiers]);
 
   useEffect(() => {
+    loadChartDashboard('revenue', buildDashboardParams(chartRanges.revenue, chartCustomRanges.revenue));
+  }, [chartCustomRanges.revenue, chartRanges.revenue, loadChartDashboard]);
+
+  useEffect(() => {
+    loadChartDashboard('outcomes', buildDashboardParams(chartRanges.outcomes, chartCustomRanges.outcomes));
+  }, [chartCustomRanges.outcomes, chartRanges.outcomes, loadChartDashboard]);
+
+  useEffect(() => {
+    loadChartDashboard('branch', buildDashboardParams(chartRanges.branch, chartCustomRanges.branch));
+  }, [chartCustomRanges.branch, chartRanges.branch, loadChartDashboard]);
+
+  useEffect(() => {
+    loadChartDashboard('hourly', buildDashboardParams(chartRanges.hourly, chartCustomRanges.hourly));
+  }, [chartCustomRanges.hourly, chartRanges.hourly, loadChartDashboard]);
+
+  useEffect(() => {
     if (activePage === 'transactions') {
       loadTransactions();
     }
   }, [activePage, loadTransactions]);
 
   async function refreshAll() {
-    await Promise.all([loadDashboard(), loadCashiers()]);
+    await Promise.all([
+      loadDashboard(),
+      loadCashiers(),
+      ...Object.keys(chartRanges).map((chartKey) =>
+        loadChartDashboard(chartKey, buildDashboardParams(chartRanges[chartKey], chartCustomRanges[chartKey]))
+      )
+    ]);
     if (activePage === 'transactions') {
       await loadTransactions();
     }
@@ -280,6 +332,20 @@ export function AdminDashboard({ onLogout, profile }) {
   function setFilter(key, value) {
     setPagination((current) => ({ ...current, page: 1 }));
     setTransactionFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function setChartRange(chartKey, nextRange) {
+    setChartRanges((current) => ({ ...current, [chartKey]: nextRange }));
+  }
+
+  function setChartCustomRange(chartKey, key, value) {
+    setChartCustomRanges((current) => ({
+      ...current,
+      [chartKey]: {
+        ...current[chartKey],
+        [key]: value
+      }
+    }));
   }
 
   return (
@@ -380,10 +446,16 @@ export function AdminDashboard({ onLogout, profile }) {
 
           {activePage === 'dashboard' ? (
             <DashboardPage
-              activeBranchCount={activeBranchCount}
+              activeBranchCount={activeBranchCountForRange}
+              chartCustomRanges={chartCustomRanges}
+              chartDashboards={chartDashboards}
+              chartLoading={chartLoading}
+              chartRanges={chartRanges}
               customRange={customRange}
               dashboard={dashboard}
               range={range}
+              setChartCustomRange={setChartCustomRange}
+              setChartRange={setChartRange}
               setCustomRange={setCustomRange}
               setRange={setRange}
             />
@@ -417,34 +489,55 @@ export function AdminDashboard({ onLogout, profile }) {
           ) : null}
         </div>
       </section>
-      {isAboutOpen ? <AboutModal onClose={() => setIsAboutOpen(false)} /> : null}
+      {isAboutOpen ? <AboutModal onClose={() => setIsAboutOpen(false)} updateState={updateState} /> : null}
     </main>
   );
 }
 
-function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCustomRange, setRange }) {
+function DashboardPage({
+  activeBranchCount,
+  chartCustomRanges,
+  chartDashboards,
+  chartLoading,
+  chartRanges,
+  customRange,
+  dashboard,
+  range,
+  setChartCustomRange,
+  setChartRange,
+  setCustomRange,
+  setRange
+}) {
   const totals = dashboard.totals || emptyDashboard.totals;
-  const revenueData = (dashboard.revenue_over_time || []).map((item) => ({
-    ...item,
-    total_amount: Number(item.total_amount || 0),
-    chart_label: formatSeriesLabel(item.label)
-  }));
-  const branchData = (dashboard.branch_performance || []).slice(0, 8).map((item, index) => ({
+  const revenueDashboard = chartDashboards.revenue || emptyDashboard;
+  const outcomesDashboard = chartDashboards.outcomes || emptyDashboard;
+  const branchDashboard = chartDashboards.branch || emptyDashboard;
+  const hourlyDashboard = chartDashboards.hourly || emptyDashboard;
+  const revenueTotals = revenueDashboard.totals || emptyDashboard.totals;
+  const outcomeTotals = outcomesDashboard.totals || emptyDashboard.totals;
+  const revenueData = buildRevenueChartData(revenueDashboard);
+  const branchData = (branchDashboard.branch_performance || []).slice(0, 8).map((item, index) => ({
     ...item,
     fill: getBranchColor(item, index)
   }));
   const successFailedData = [
-    { fill: '#059669', name: 'Success', value: Number(totals.success_count || 0) },
-    { fill: '#dc2626', name: 'Failed', value: Number(totals.failed_count || 0) }
+    { fill: '#059669', name: 'Success', value: Number(outcomeTotals.success_count || 0) },
+    { fill: '#dc2626', name: 'Failed', value: Number(outcomeTotals.failed_count || 0) }
   ].filter((item) => item.value > 0);
-  const hourlyData = (dashboard.volume_by_hour || []).map((item) => ({
+  const hourlyData = (hourlyDashboard.volume_by_hour || []).map((item) => ({
     ...item,
     label: String(item.hour).padStart(2, '0')
   }));
 
   return (
     <div className="space-y-4">
-      <FilterBar customRange={customRange} range={range} setCustomRange={setCustomRange} setRange={setRange} />
+      <FilterBar
+        customRange={customRange}
+        label="KPI timeline"
+        range={range}
+        setCustomRange={setCustomRange}
+        setRange={setRange}
+      />
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard
@@ -482,72 +575,130 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
       </section>
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.8fr)]">
-        <Card className="transition-shadow hover:shadow-md">
-          <CardHeader>
-            <CardTitle>Revenue trend</CardTitle>
-            <CardDescription>Gross payment value across the selected period.</CardDescription>
+        <Card className="overflow-hidden border-slate-800 bg-slate-950 text-slate-50 shadow-xl shadow-slate-950/10 transition-shadow hover:shadow-2xl">
+          <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+            <div>
+              <CardTitle className="text-base text-slate-50">Revenue trend</CardTitle>
+              <CardDescription className="text-slate-400">Gross payment value by creation date.</CardDescription>
+              <div className="mt-4 flex flex-wrap items-end gap-4">
+                <div>
+                  <p className="text-xs uppercase text-slate-500">Revenue</p>
+                  <p className="text-2xl font-bold tracking-normal text-white">
+                    {formatCurrency(revenueTotals.total_amount)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase text-slate-500">Transactions</p>
+                  <p className="text-lg font-semibold text-slate-200">
+                    {Number(revenueTotals.total_count || 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <ChartRangeControl
+              customRange={chartCustomRanges.revenue}
+              dark
+              range={chartRanges.revenue}
+              onCustomRangeChange={(key, value) => setChartCustomRange('revenue', key, value)}
+              onRangeChange={(value) => setChartRange('revenue', value)}
+            />
           </CardHeader>
           <CardContent>
-            {revenueData.length ? (
+            {chartLoading.revenue ? (
+              <DarkEmptyState label="Loading revenue trend..." />
+            ) : revenueData.length ? (
               <ChartContainer
-                className="h-[260px] w-full rounded-md border bg-background p-2"
+                className="h-[310px] w-full text-slate-300 [&_.recharts-cartesian-axis-tick_text]:fill-slate-400 [&_.recharts-grid_line]:stroke-slate-800"
                 config={chartConfig}
               >
-                <LineChart data={revenueData} margin={{ bottom: 0, left: 0, right: 10, top: 12 }}>
-                  <CartesianGrid strokeDasharray="2 10" vertical={false} />
-                  <XAxis dataKey="chart_label" tickLine={false} axisLine={false} tickMargin={8} />
+                <AreaChart data={revenueData} margin={{ bottom: 8, left: 0, right: 16, top: 16 }}>
+                  <defs>
+                    <linearGradient id="revenueFill" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.34} />
+                      <stop offset="70%" stopColor="#38bdf8" stopOpacity={0.06} />
+                      <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 10" vertical />
+                  <XAxis
+                    dataKey="chart_label"
+                    dy={8}
+                    interval="preserveStartEnd"
+                    minTickGap={18}
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                  />
                   <YAxis
-                    domain={['auto', 'auto']}
+                    domain={[0, (dataMax) => Math.max(Number(dataMax || 0), 1)]}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={formatCompactCurrency}
-                    width={58}
+                    width={64}
                   />
                   <ChartTooltip
-                    cursor={{ stroke: 'hsl(var(--primary))', strokeDasharray: '4 4', strokeWidth: 1 }}
-                    content={<ChartTooltipContent formatter={(value) => formatCurrency(value)} />}
+                    cursor={{ stroke: '#38bdf8', strokeDasharray: '4 4', strokeWidth: 1 }}
+                    content={
+                      <ChartTooltipContent
+                        className="border-slate-700 bg-slate-900 text-slate-100"
+                        formatter={(value) => formatCurrency(value)}
+                      />
+                    }
                   />
-                  <Line
+                  <Area
                     activeDot={{
-                      r: 6,
-                      fill: 'hsl(var(--background))',
-                      stroke: 'hsl(var(--primary))',
+                      r: 6.5,
+                      fill: '#0f172a',
+                      stroke: '#38bdf8',
                       strokeWidth: 3
                     }}
                     dataKey="total_amount"
                     dot={{
-                      r: 3,
-                      fill: 'hsl(var(--background))',
-                      stroke: 'hsl(var(--primary))',
+                      r: 3.5,
+                      fill: '#0f172a',
+                      stroke: '#38bdf8',
                       strokeWidth: 2
                     }}
-                    stroke="hsl(var(--primary))"
+                    fill="url(#revenueFill)"
+                    fillOpacity={1}
+                    stroke="#38bdf8"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeWidth={3}
+                    strokeWidth={3.5}
                     type="monotone"
                   />
-                </LineChart>
+                </AreaChart>
               </ChartContainer>
             ) : (
-              <EmptyState label="No revenue trend data for this range." />
+              <DarkEmptyState label="No revenue trend data for this range." />
             )}
           </CardContent>
         </Card>
 
         <Card className="transition-shadow hover:shadow-md">
-          <CardHeader>
-            <CardTitle>Success vs failed</CardTitle>
-            <CardDescription>Callback outcomes for completed requests.</CardDescription>
+          <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+            <div>
+              <CardTitle>Success vs failed</CardTitle>
+              <CardDescription>Callback outcomes for completed requests.</CardDescription>
+            </div>
+            <ChartRangeControl
+              customRange={chartCustomRanges.outcomes}
+              range={chartRanges.outcomes}
+              onCustomRangeChange={(key, value) => setChartCustomRange('outcomes', key, value)}
+              onRangeChange={(value) => setChartRange('outcomes', value)}
+            />
           </CardHeader>
           <CardContent>
-            {successFailedData.length ? (
-              <ChartContainer className="h-[240px] w-full" config={chartConfig}>
+            {chartLoading.outcomes ? (
+              <EmptyState label="Loading outcome data..." />
+            ) : successFailedData.length ? (
+              <ChartContainer className="h-[240px] w-full rounded-md border bg-background p-2" config={chartConfig}>
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
+                  <Legend verticalAlign="bottom" height={24} iconType="circle" />
                   <Pie
                     cx="50%"
-                    cy="50%"
+                    cy="46%"
                     data={successFailedData}
                     dataKey="value"
                     innerRadius={56}
@@ -570,29 +721,74 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
       </section>
 
       <section className="grid gap-3 xl:grid-cols-2">
-        <Card className="transition-shadow hover:shadow-md">
-          <CardHeader>
-            <CardTitle>Branch performance</CardTitle>
-            <CardDescription>Revenue comparison by branch.</CardDescription>
+        <Card className="overflow-hidden transition-shadow hover:shadow-md">
+          <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+            <div>
+              <CardTitle>Branch performance</CardTitle>
+              <CardDescription>Revenue comparison by branch.</CardDescription>
+            </div>
+            <ChartRangeControl
+              customRange={chartCustomRanges.branch}
+              range={chartRanges.branch}
+              onCustomRangeChange={(key, value) => setChartCustomRange('branch', key, value)}
+              onRangeChange={(value) => setChartRange('branch', value)}
+            />
           </CardHeader>
           <CardContent>
-            {branchData.length ? (
-              <ChartContainer className="h-[260px] w-full" config={chartConfig}>
-                <BarChart data={branchData} layout="vertical" margin={{ left: 4, right: 10 }}>
-                  <CartesianGrid horizontal={false} />
-                  <XAxis type="number" tickFormatter={formatCompactCurrency} />
-                  <YAxis dataKey="branch_name" type="category" width={110} tickLine={false} axisLine={false} />
+            {chartLoading.branch ? (
+              <EmptyState label="Loading branch performance..." />
+            ) : branchData.length ? (
+              <>
+                <ChartContainer
+                  className="h-[300px] w-full rounded-lg border bg-slate-950 p-3 text-slate-300 [&_.recharts-cartesian-axis-tick_text]:fill-slate-400 [&_.recharts-grid_line]:stroke-slate-800"
+                  config={chartConfig}
+                >
+                  <BarChart data={branchData} layout="vertical" margin={{ bottom: 6, left: 2, right: 18, top: 8 }}>
+                    <CartesianGrid horizontal={false} strokeDasharray="3 8" />
+                    <XAxis
+                      axisLine={false}
+                      tickFormatter={formatCompactCurrency}
+                      tickLine={false}
+                      type="number"
+                    />
+                    <YAxis
+                      axisLine={false}
+                      dataKey="branch_name"
+                      tickLine={false}
+                      type="category"
+                      width={116}
+                    />
                   <ChartTooltip
-                    content={<ChartTooltipContent formatter={(value) => formatCurrency(value)} />}
-                    cursor={false}
+                      content={
+                        <ChartTooltipContent
+                          className="border-slate-700 bg-slate-900 text-slate-100"
+                          formatter={(value) => formatCurrency(value)}
+                        />
+                      }
+                      cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
                   />
-                  <Bar dataKey="total_amount" radius={[0, 4, 4, 0]}>
-                    {branchData.map((entry) => (
-                      <Cell fill={entry.fill} key={entry.branch_id || entry.branch_name} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ChartContainer>
+                    <Bar background={{ fill: '#172033', radius: 8 }} barSize={18} dataKey="total_amount" radius={[0, 8, 8, 0]}>
+                      {branchData.map((entry) => (
+                        <Cell fill={entry.fill} key={entry.branch_id || entry.branch_name} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {branchData.slice(0, 4).map((branch) => (
+                    <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2" key={branch.branch_id || branch.branch_name}>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: branch.fill }} />
+                          <p className="truncate text-xs font-medium">{branch.branch_name}</p>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{formatBranchSuccessRate(branch)} success</p>
+                      </div>
+                      <p className="shrink-0 text-xs font-semibold">{formatCurrency(branch.total_amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
             ) : (
               <EmptyState label="No branch revenue yet." />
             )}
@@ -600,20 +796,32 @@ function DashboardPage({ activeBranchCount, customRange, dashboard, range, setCu
         </Card>
 
         <Card className="transition-shadow hover:shadow-md">
-          <CardHeader>
-            <CardTitle>Hourly activity</CardTitle>
-            <CardDescription>Transaction volume by time of day.</CardDescription>
+          <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+            <div>
+              <CardTitle>Hourly activity</CardTitle>
+              <CardDescription>Transaction volume by time of day.</CardDescription>
+            </div>
+            <ChartRangeControl
+              customRange={chartCustomRanges.hourly}
+              range={chartRanges.hourly}
+              onCustomRangeChange={(key, value) => setChartCustomRange('hourly', key, value)}
+              onRangeChange={(value) => setChartRange('hourly', value)}
+            />
           </CardHeader>
           <CardContent>
-            <ChartContainer className="h-[260px] w-full" config={chartConfig}>
-              <BarChart data={hourlyData} margin={{ left: 0, right: 8, top: 4 }}>
-                <CartesianGrid vertical={false} />
-                <XAxis dataKey="label" interval={2} tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} width={36} />
-                <ChartTooltip content={<ChartTooltipContent />} cursor={false} />
-                <Bar dataKey="total_count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ChartContainer>
+            {chartLoading.hourly ? (
+              <EmptyState label="Loading hourly activity..." />
+            ) : (
+              <ChartContainer className="h-[260px] w-full rounded-md border bg-background p-2" config={chartConfig}>
+                <BarChart data={hourlyData} margin={{ left: 0, right: 8, top: 4 }}>
+                  <CartesianGrid strokeDasharray="3 8" vertical={false} />
+                  <XAxis dataKey="label" interval={2} tickLine={false} axisLine={false} />
+                  <YAxis tickLine={false} axisLine={false} width={36} />
+                  <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: 'hsl(var(--secondary))' }} />
+                  <Bar dataKey="total_count" fill="hsl(var(--accent))" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            )}
           </CardContent>
         </Card>
       </section>
@@ -929,22 +1137,26 @@ function BranchSetupPage({
   );
 }
 
-function FilterBar({ customRange, range, setCustomRange, setRange }) {
+function FilterBar({ customRange, label = 'Timeline', range, setCustomRange, setRange }) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-2 p-2.5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {timeRanges.map((item) => (
-            <Button
-              className="h-8 px-2.5 text-xs"
-              key={item.value}
-              size="sm"
-              variant={range === item.value ? 'default' : 'outline'}
-              onClick={() => setRange(item.value)}
-            >
-              {item.label}
-            </Button>
-          ))}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium uppercase text-muted-foreground">{label}</span>
+          <div className="flex flex-wrap gap-2">
+            {timeRanges.map((item) => (
+              <Button
+                className="h-8 px-2.5 text-xs"
+                key={item.value}
+                size="sm"
+                type="button"
+                variant={range === item.value ? 'default' : 'outline'}
+                onClick={() => setRange(item.value)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
         </div>
         {range === 'custom' ? (
           <div className="flex flex-wrap gap-2">
@@ -964,6 +1176,58 @@ function FilterBar({ customRange, range, setCustomRange, setRange }) {
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function ChartRangeControl({ customRange, dark = false, onCustomRangeChange, onRangeChange, range }) {
+  const inactiveClass = dark
+    ? 'border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800'
+    : '';
+  const activeClass = dark
+    ? 'border-sky-500 bg-sky-500 text-slate-950 hover:bg-sky-400'
+    : '';
+
+  return (
+    <div className="flex max-w-full flex-col gap-2">
+      <div className="flex flex-wrap justify-start gap-1.5 sm:justify-end">
+          {timeRanges.map((item) => (
+            <Button
+              className={`h-8 px-2.5 text-xs ${range === item.value ? activeClass : inactiveClass}`}
+              key={item.value}
+              size="sm"
+              type="button"
+              variant={range === item.value && !dark ? 'default' : 'outline'}
+              onClick={() => onRangeChange(item.value)}
+            >
+              {item.label}
+            </Button>
+          ))}
+      </div>
+      {range === 'custom' ? (
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <Input
+            className={`h-8 w-36 text-xs ${dark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'bg-background'}`}
+            type="date"
+            value={customRange.date_from}
+            onChange={(event) => onCustomRangeChange('date_from', event.target.value)}
+          />
+          <Input
+            className={`h-8 w-36 text-xs ${dark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'bg-background'}`}
+            type="date"
+            value={customRange.date_to}
+            onChange={(event) => onCustomRangeChange('date_to', event.target.value)}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DarkEmptyState({ label }) {
+  return (
+    <div className="flex min-h-32 items-center justify-center rounded-md border border-slate-800 text-xs text-slate-400">
+      {label}
+    </div>
   );
 }
 
@@ -1082,8 +1346,130 @@ function EmptyState({ label }) {
   );
 }
 
+function buildRevenueChartData(dashboard = emptyDashboard) {
+  const rawSeries = dashboard.revenue_over_time || [];
+  const range = dashboard.range || {};
+  const dayCount = daysBetweenDates(range.dateFrom, range.dateTo);
+  const granularity = rawSeries[0]?.granularity || inferRevenueGranularity(range, dayCount);
+
+  if (!range.dateFrom || !range.dateTo || !rawSeries.length) {
+    return rawSeries.map(normalizeRevenuePoint);
+  }
+
+  const rawByKey = new Map(
+    rawSeries.map((item) => [getRevenuePointKey(item, granularity), normalizeRevenuePoint(item)])
+  );
+  const points = [];
+
+  if (granularity === 'hour') {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const label = `${String(hour).padStart(2, '0')}:00`;
+      points.push(rawByKey.get(label) || normalizeRevenuePoint({ granularity, label }));
+    }
+    return points;
+  }
+
+  const cursor = granularity === 'month'
+    ? startOfMonth(new Date(range.dateFrom))
+    : startOfDay(new Date(range.dateFrom));
+  const end = granularity === 'month'
+    ? startOfMonth(new Date(range.dateTo))
+    : startOfDay(new Date(range.dateTo));
+
+  while (cursor.getTime() <= end.getTime()) {
+    const label = granularity === 'month' ? formatMonthKey(cursor) : formatDateKey(cursor);
+    points.push(rawByKey.get(label) || normalizeRevenuePoint({ granularity, label }));
+
+    if (granularity === 'month') {
+      cursor.setMonth(cursor.getMonth() + 1);
+    } else {
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  return points;
+}
+
+function inferRevenueGranularity(range, dayCount) {
+  if (range.range === 'today' || dayCount <= 1) {
+    return 'hour';
+  }
+
+  if (range.range === 'last_12_months' || dayCount > 90) {
+    return 'month';
+  }
+
+  return 'day';
+}
+
+function normalizeRevenuePoint(item) {
+  return {
+    ...item,
+    chart_label: formatSeriesLabel(item.label),
+    total_amount: Number(item.total_amount || 0),
+    total_count: Number(item.total_count || 0)
+  };
+}
+
+function getRevenuePointKey(item, granularity) {
+  if (granularity === 'hour') {
+    const match = String(item.label || '').match(/^([01]\d|2[0-3]):/);
+    return match ? `${match[1]}:00` : String(item.label || '');
+  }
+
+  return String(item.label || '');
+}
+
+function buildDashboardParams(range, customRange = {}) {
+  if (range === 'custom') {
+    return {
+      date_from: customRange.date_from || undefined,
+      date_to: customRange.date_to || undefined,
+      range
+    };
+  }
+
+  return { range };
+}
+
 function formatCurrency(value) {
   return `KES ${Number(value || 0).toLocaleString()}`;
+}
+
+function startOfDay(date) {
+  const nextDate = new Date(date);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function startOfMonth(date) {
+  const nextDate = new Date(date);
+  nextDate.setDate(1);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function formatDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('-');
+}
+
+function formatMonthKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0')
+  ].join('-');
+}
+
+function daysBetweenDates(start, end) {
+  if (!start || !end) {
+    return 0;
+  }
+
+  return Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / 86400000);
 }
 
 function getBranchColor(branch, index = 0) {
@@ -1096,6 +1482,16 @@ function getBranchColor(branch, index = 0) {
 
 function isHexColor(value) {
   return /^#[0-9a-f]{6}$/i.test(String(value || ''));
+}
+
+function formatBranchSuccessRate(branch) {
+  const total = Number(branch.total_count || 0);
+
+  if (!total) {
+    return '0%';
+  }
+
+  return `${Math.round((Number(branch.success_count || 0) / total) * 100)}%`;
 }
 
 function formatCompactCurrency(value) {

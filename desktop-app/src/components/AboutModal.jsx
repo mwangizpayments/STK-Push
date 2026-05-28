@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { appName, logoPath } from '@/config/branding';
 
-export function AboutModal({ onClose }) {
+export function AboutModal({ onClose, updateState }) {
   const [version, setVersion] = useState('1.0.0');
+  const updateReady = updateState?.status === 'downloaded';
 
   useEffect(() => {
     window.mpesaDesktop?.appVersion?.().then(setVersion).catch(() => {});
@@ -28,6 +29,23 @@ export function AboutModal({ onClose }) {
           <p className="text-xs font-medium uppercase text-muted-foreground">Version</p>
           <p className="mt-1 font-mono text-sm">{version}</p>
         </div>
+
+        {updateReady ? (
+          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+            <p className="text-sm font-semibold">Update available</p>
+            {updateState.updateVersion ? (
+              <p className="mt-1 text-xs">Version {updateState.updateVersion} is ready to install.</p>
+            ) : null}
+            <Button
+              className="mt-3 h-9 bg-emerald-600 text-white hover:bg-emerald-700"
+              type="button"
+              onClick={() => window.mpesaDesktop?.restartAndInstallUpdate?.().catch(() => {})}
+            >
+              <Download className="h-4 w-4" />
+              Update now
+            </Button>
+          </div>
+        ) : null}
       </section>
     </div>
   );

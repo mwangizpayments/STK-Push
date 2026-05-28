@@ -113,22 +113,125 @@ function buildBranchPerformance(transactions, branchMap) {
 }
 
 function buildRevenueSeries(transactions, range) {
-  const useMonths = range.range === 'last_12_months' || daysBetween(range.dateFrom, range.dateTo) > 90;
-  const buckets = new Map();
+  const dayCount = daysBetween(range.dateFrom, range.dateTo);
+
+  if (range.range === 'today' || dayCount <= 1) {
+    return buildHourlyRevenueSeries(transactions);
+  }
+
+  if (range.range === 'last_12_months' || dayCount > 90) {
+    return buildMonthlyRevenueSeries(transactions, range);
+  }
+
+  return buildDailyRevenueSeries(transactions, range);
+}
+
+function buildHourlyRevenueSeries(transactions) {
+  const buckets = new Map(
+    Array.from({ length: 24 }, (_, hour) => [
+      String(hour).padStart(2, '0'),
+      {
+        granularity: 'hour',
+        label: `${String(hour).padStart(2, '0')}:00`,
+        total_amount: 0,
+        total_count: 0
+      }
+    ])
+  );
 
   for (const transaction of transactions) {
     const date = new Date(transaction.created_at);
-    const key = useMonths
-      ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-      : date.toISOString().slice(0, 10);
-    const current = buckets.get(key) || { label: key, total_amount: 0, total_count: 0 };
-    current.total_amount +=
-      transaction.status === TRANSACTION_STATES.SUCCESS ? Number(transaction.amount || 0) : 0;
-    current.total_count += 1;
-    buckets.set(key, current);
+    const key = String(date.getHours()).padStart(2, '0');
+    addTransactionToRevenueBucket(buckets.get(key), transaction);
   }
 
-  return [...buckets.values()].sort((a, b) => a.label.localeCompare(b.label));
+  return [...buckets.values()];
+}
+
+function buildDailyRevenueSeries(transactions, range) {
+  const buckets = new Map();
+  const cursor = startOfDay(new Date(range.dateFrom));
+  const end = startOfDay(new Date(range.dateTo));
+
+  while (cursor.getTime() <= end.getTime()) {
+    const key = formatDateKey(cursor);
+    buckets.set(key, {
+      granularity: 'day',
+      label: key,
+      total_amount: 0,
+      total_count: 0
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  for (const transaction of transactions) {
+    const key = formatDateKey(new Date(transaction.created_at));
+    addTransactionToRevenueBucket(buckets.get(key), transaction);
+  }
+
+  return [...buckets.values()];
+}
+
+function buildMonthlyRevenueSeries(transactions, range) {
+  const buckets = new Map();
+  const cursor = startOfMonth(new Date(range.dateFrom));
+  const end = startOfMonth(new Date(range.dateTo));
+
+  while (cursor.getTime() <= end.getTime()) {
+    const key = formatMonthKey(cursor);
+    buckets.set(key, {
+      granularity: 'month',
+      label: key,
+      total_amount: 0,
+      total_count: 0
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  for (const transaction of transactions) {
+    const key = formatMonthKey(new Date(transaction.created_at));
+    addTransactionToRevenueBucket(buckets.get(key), transaction);
+  }
+
+  return [...buckets.values()];
+}
+
+function addTransactionToRevenueBucket(bucket, transaction) {
+  if (!bucket) {
+    return;
+  }
+
+  bucket.total_amount +=
+    transaction.status === TRANSACTION_STATES.SUCCESS ? Number(transaction.amount || 0) : 0;
+  bucket.total_count += 1;
+}
+
+function startOfDay(date) {
+  const nextDate = new Date(date);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function startOfMonth(date) {
+  const nextDate = new Date(date);
+  nextDate.setDate(1);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+}
+
+function formatDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('-');
+}
+
+function formatMonthKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0')
+  ].join('-');
 }
 
 function buildHourlyVolume(transactions) {
