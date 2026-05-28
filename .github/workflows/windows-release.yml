@@ -16,6 +16,10 @@ jobs:
       BUILD_NUMBER: ${{ github.run_number }}
       ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: "true"
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || vars.VITE_API_BASE_URL }}
+      VITE_DEFAULT_BRANCH_ID: ${{ secrets.VITE_DEFAULT_BRANCH_ID || vars.VITE_DEFAULT_BRANCH_ID }}
       WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
 
@@ -37,5 +41,10 @@ jobs:
           node -e "console.log(require.resolve('vite/package.json'))"
           node -e "console.log(require.resolve('electron-builder/package.json'))"
 
+      - name: Verify release environment
+        run: npm run verify:release-env -w desktop-app
+
       - name: Build and publish Windows installer
+        env:
+          NODE_ENV: production
         run: npm run release -w desktop-app
